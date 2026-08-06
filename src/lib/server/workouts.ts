@@ -420,7 +420,9 @@ export function createWorkoutFromRoutine(
 						workoutExerciseId,
 						orderIndex: i,
 						weightKg: item.targetWeightKg,
-						reps: item.targetReps,
+						// The bottom of a rep range is the commitment; anything above it
+						// is upside the user types in as they go.
+						reps: item.targetRepsMin,
 						distanceM: item.targetDistanceM,
 						durationS: item.targetDurationS,
 						isCompleted: false

@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import { formatRepTarget } from '$lib/constants';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -11,6 +12,15 @@
 
 	let active = $derived(data.routines.filter((r) => !r.isArchived));
 	let archived = $derived(data.routines.filter((r) => r.isArchived));
+
+	/** "Back Squat 3×5", "Bench Press 3×8–12", or just the name if untargeted. */
+	function describe(entry: PageData['routines'][number]['plan'][number]): string {
+		const reps = formatRepTarget(entry.targetRepsMin, entry.targetRepsMax);
+		if (entry.targetSets == null && reps === '—') return entry.name;
+		if (reps === '—') return `${entry.name} ${entry.targetSets}×`;
+		if (entry.targetSets == null) return `${entry.name} ${reps} reps`;
+		return `${entry.name} ${entry.targetSets}×${reps}`;
+	}
 </script>
 
 <svelte:head><title>Routines · OpenWeights</title></svelte:head>
@@ -73,8 +83,10 @@
 					{routine.exerciseCount}
 					{routine.exerciseCount === 1 ? 'exercise' : 'exercises'}
 				</p>
-				{#if routine.exerciseNames.length > 0}
-					<p class="mt-1 text-sm text-muted">{routine.exerciseNames.join(' · ')}</p>
+				{#if routine.plan.length > 0}
+					<p class="mt-1 text-sm text-muted">
+						{routine.plan.map(describe).join(' · ')}
+					</p>
 				{/if}
 				{#if routine.notes}
 					<p class="mt-1 text-sm text-faint">{routine.notes}</p>

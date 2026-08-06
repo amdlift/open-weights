@@ -12,6 +12,7 @@ import {
 	deleteRoutine,
 	getRoutine,
 	moveRoutineItem,
+	normaliseRepTarget,
 	removeRoutineItem,
 	updateRoutine,
 	updateRoutineItem
@@ -76,8 +77,13 @@ export const actions: Actions = {
 		const targets: Record<string, unknown> = {};
 		const targetSets = readInteger(form, 'targetSets', { min: 1, max: 20 });
 		if (targetSets !== undefined) targets.targetSets = targetSets;
-		const targetReps = readInteger(form, 'targetReps', { min: 1, max: 1000 });
-		if (targetReps !== undefined) targets.targetReps = targetReps;
+		const repsMin = readInteger(form, 'targetRepsMin', { min: 1, max: 1000 });
+		const repsMax = readInteger(form, 'targetRepsMax', { min: 1, max: 1000 });
+		if (repsMin !== undefined || repsMax !== undefined) {
+			const reps = normaliseRepTarget(repsMin ?? null, repsMax ?? null);
+			targets.targetRepsMin = reps.min;
+			targets.targetRepsMax = reps.max;
+		}
 		const targetWeightKg = readWeightKg(form, 'targetWeight', user.unitSystem);
 		if (targetWeightKg !== undefined) targets.targetWeightKg = targetWeightKg;
 		const targetDistanceM = readDistanceM(form, 'targetDistance', user.unitSystem);

@@ -250,7 +250,16 @@ export const routineExercises = sqliteTable(
 			.references(() => exercises.id, { onDelete: 'restrict' }),
 		orderIndex: integer('order_index').notNull().default(0),
 		targetSets: integer('target_sets'),
-		targetReps: integer('target_reps'),
+		/**
+		 * Rep target, as a range. `min` alone means an exact target ("5 reps");
+		 * both set means a range ("8–12 reps").
+		 *
+		 * The column is still called `target_reps` because it predates the range
+		 * and renaming it would mean rewriting the table for no user-visible
+		 * gain. The TypeScript name is what the app reads.
+		 */
+		targetRepsMin: integer('target_reps'),
+		targetRepsMax: integer('target_reps_max'),
 		targetWeightKg: real('target_weight_kg'),
 		targetDistanceM: real('target_distance_m'),
 		targetDurationS: integer('target_duration_s'),

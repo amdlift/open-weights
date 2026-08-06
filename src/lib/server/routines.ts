@@ -7,7 +7,8 @@ export type RoutineItem = {
 	id: number;
 	orderIndex: number;
 	targetSets: number | null;
-	targetReps: number | null;
+	targetRepsMin: number | null;
+	targetRepsMax: number | null;
 	targetWeightKg: number | null;
 	targetDistanceM: number | null;
 	targetDurationS: number | null;
@@ -62,7 +63,13 @@ export type RoutineSummary = {
 	notes: string | null;
 	isArchived: boolean;
 	exerciseCount: number;
-	exerciseNames: string[];
+	/** Enough to render "Back Squat 3×5 · Bench 3×8–12" without a second query. */
+	plan: Array<{
+		name: string;
+		targetSets: number | null;
+		targetRepsMin: number | null;
+		targetRepsMax: number | null;
+	}>;
 };
 
 export function listRoutines(userId: number, db: Db = getDb()): RoutineSummary[] {
@@ -79,7 +86,9 @@ export function listRoutines(userId: number, db: Db = getDb()): RoutineSummary[]
 		.select({
 			routineId: schema.routineExercises.routineId,
 			name: schema.exercises.name,
-			orderIndex: schema.routineExercises.orderIndex
+			targetSets: schema.routineExercises.targetSets,
+			targetRepsMin: schema.routineExercises.targetRepsMin,
+			targetRepsMax: schema.routineExercises.targetRepsMax
 		})
 		.from(schema.routineExercises)
 		.innerJoin(schema.exercises, eq(schema.exercises.id, schema.routineExercises.exerciseId))
@@ -89,14 +98,16 @@ export function listRoutines(userId: number, db: Db = getDb()): RoutineSummary[]
 		.all();
 
 	return routines.map((routine) => {
-		const names = items.filter((i) => i.routineId === routine.id).map((i) => i.name);
+		const plan = items
+			.filter((i) => i.routineId === routine.id)
+			.map(({ routineId: _routineId, ...rest }) => rest);
 		return {
 			id: routine.id,
 			name: routine.name,
 			notes: routine.notes,
 			isArchived: routine.isArchived,
-			exerciseCount: names.length,
-			exerciseNames: names
+			exerciseCount: plan.length,
+			plan
 		};
 	});
 }
@@ -118,7 +129,8 @@ export function getRoutine(
 			id: schema.routineExercises.id,
 			orderIndex: schema.routineExercises.orderIndex,
 			targetSets: schema.routineExercises.targetSets,
-			targetReps: schema.routineExercises.targetReps,
+			targetRepsMin: schema.routineExercises.targetRepsMin,
+			targetRepsMax: schema.routineExercises.targetRepsMax,
 			targetWeightKg: schema.routineExercises.targetWeightKg,
 			targetDistanceM: schema.routineExercises.targetDistanceM,
 			targetDurationS: schema.routineExercises.targetDurationS,
@@ -144,7 +156,8 @@ export function getRoutine(
 			id: item.id,
 			orderIndex: item.orderIndex,
 			targetSets: item.targetSets,
-			targetReps: item.targetReps,
+			targetRepsMin: item.targetRepsMin,
+			targetRepsMax: item.targetRepsMax,
 			targetWeightKg: item.targetWeightKg,
 			targetDistanceM: item.targetDistanceM,
 			targetDurationS: item.targetDurationS,
@@ -176,8 +189,10 @@ export function createRoutine(
  * Snapshot a logged workout as a reusable routine.
  *
  * Targets come from the working sets only — a warm-up is a property of the day,
- * not of the plan — and the weight recorded is the heaviest working set, which
- * is what a lifter means by "the weight I do on this".
+ * not of the plan. The weight recorded is the heaviest working set, which is
+ * what a lifter means by "the weight I do on this", and the rep target becomes
+ * the range that was actually performed: a session of 12/10/8 saves as 8–12
+ * rather than pretending 12 was the plan for every set.
  */
 export function createRoutineFromWorkout(
 	userId: number,
@@ -211,6 +226,7 @@ export function createRoutineFromWorkout(
 				.select({
 					setCount: sql<number>`count(*)`,
 					maxWeight: sql<number | null>`max(${schema.sets.weightKg})`,
+					minReps: sql<number | null>`min(${schema.sets.reps})`,
 					maxReps: sql<number | null>`max(${schema.sets.reps})`,
 					maxDistance: sql<number | null>`max(${schema.sets.distanceM})`,
 					maxDuration: sql<number | null>`max(${schema.sets.durationS})`
@@ -221,13 +237,18 @@ export function createRoutineFromWorkout(
 				)
 				.get();
 
+			// Every set at the same reps is an exact target, not a range of one.
+			const repsMin = stats?.minReps ?? null;
+			const repsMax = stats?.maxReps ?? null;
+
 			tx.insert(schema.routineExercises)
 				.values({
 					routineId,
 					exerciseId: item.exerciseId,
 					orderIndex: index,
 					targetSets: stats?.setCount || null,
-					targetReps: stats?.maxReps ?? null,
+					targetRepsMin: repsMin,
+					targetRepsMax: repsMax != null && repsMax !== repsMin ? repsMax : null,
 					targetWeightKg: stats?.maxWeight ?? null,
 					targetDistanceM: stats?.maxDistance ?? null,
 					targetDurationS: stats?.maxDuration ?? null,
@@ -290,9 +311,31 @@ export function addExerciseToRoutine(
 	});
 }
 
+/**
+ * Put a submitted rep target into canonical form.
+ *
+ * Two cases are forgiven rather than rejected, because both are obvious typos
+ * and refusing them would just make the user retype the row: a range entered
+ * backwards is swapped, and an upper bound with no lower bound is read as the
+ * exact target. `min === max` collapses to an exact target so that "5–5" is
+ * never stored, which keeps display and prefill logic from special-casing it.
+ */
+export function normaliseRepTarget(
+	min: number | null,
+	max: number | null
+): { min: number | null; max: number | null } {
+	if (min == null && max == null) return { min: null, max: null };
+	if (min == null) return { min: max, max: null };
+	if (max == null) return { min, max: null };
+	if (max < min) return { min: max, max: min };
+	if (max === min) return { min, max: null };
+	return { min, max };
+}
+
 export type RoutineTargets = {
 	targetSets?: number | null;
-	targetReps?: number | null;
+	targetRepsMin?: number | null;
+	targetRepsMax?: number | null;
 	targetWeightKg?: number | null;
 	targetDistanceM?: number | null;
 	targetDurationS?: number | null;

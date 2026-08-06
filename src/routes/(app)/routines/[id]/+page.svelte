@@ -3,7 +3,12 @@
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import Icon from '$lib/components/Icon.svelte';
 	import ExercisePicker from '$lib/components/workout/ExercisePicker.svelte';
-	import { EXERCISE_KIND_LABELS, MUSCLE_GROUP_LABELS, fieldsForKind } from '$lib/constants';
+	import {
+		EXERCISE_KIND_LABELS,
+		MUSCLE_GROUP_LABELS,
+		fieldsForKind,
+		formatRepTarget
+	} from '$lib/constants';
 	import {
 		distanceUnit,
 		formatDuration,
@@ -206,16 +211,33 @@
 
 				{#if fields.reps}
 					<div>
-						<label class="ow-label text-xs" for="reps-{item.id}">Target reps</label>
-						<input
-							id="reps-{item.id}"
-							name="targetReps"
-							class="ow-input h-10 text-center tnum"
-							inputmode="numeric"
-							placeholder="—"
-							value={item.targetReps ?? ''}
-							onchange={submitOwnForm}
-						/>
+						<span class="ow-label text-xs">Target reps</span>
+						<div class="flex items-center gap-1.5">
+							<input
+								name="targetRepsMin"
+								class="ow-input h-10 min-w-0 flex-1 px-1 text-center tnum"
+								inputmode="numeric"
+								placeholder="—"
+								aria-label="Target reps, lower end of the range"
+								value={item.targetRepsMin ?? ''}
+								onchange={submitOwnForm}
+							/>
+							<span class="shrink-0 text-xs text-faint" aria-hidden="true">to</span>
+							<input
+								name="targetRepsMax"
+								class="ow-input h-10 min-w-0 flex-1 px-1 text-center tnum"
+								inputmode="numeric"
+								placeholder="—"
+								aria-label="Target reps, upper end of the range (leave blank for an exact target)"
+								value={item.targetRepsMax ?? ''}
+								onchange={submitOwnForm}
+							/>
+						</div>
+						<p class="mt-1 text-[11px] text-faint">
+							{item.targetRepsMin == null && item.targetRepsMax == null
+								? 'Leave the second box blank for an exact target.'
+								: `Target: ${formatRepTarget(item.targetRepsMin, item.targetRepsMax)} reps`}
+						</p>
 					</div>
 				{/if}
 

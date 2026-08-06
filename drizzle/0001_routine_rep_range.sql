@@ -1,0 +1,1 @@
+ALTER TABLE `routine_exercises` ADD `target_reps_max` integer;

@@ -53,6 +53,22 @@ export function fieldsForKind(kind: ExerciseKind): {
 	}
 }
 
+/**
+ * Render a routine's rep target: `8–12`, or `5` when it is an exact number.
+ *
+ * An en dash rather than a hyphen — `8-12` reads as a subtraction at small
+ * sizes, which is exactly where this appears.
+ */
+export function formatRepTarget(
+	min: number | null | undefined,
+	max: number | null | undefined
+): string {
+	if (min == null && max == null) return '—';
+	if (min == null) return `up to ${max}`;
+	if (max == null || max === min) return String(min);
+	return `${min}–${max}`;
+}
+
 /** True when sets of this kind can contribute to a 1RM estimate. */
 export function supportsOneRm(kind: ExerciseKind): boolean {
 	return kind === 'weight_reps' || kind === 'weighted_bodyweight';
