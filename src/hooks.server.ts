@@ -1,5 +1,6 @@
 import { redirect, type Handle } from '@sveltejs/kit';
 import { SESSION_COOKIE, clearSessionCookie, validateSession } from '$lib/server/auth';
+import { checkCsrf, csrfErrorResponse } from '$lib/server/csrf';
 import { getDb } from '$lib/server/db';
 import { countUsers, isSignupOpen } from '$lib/server/users';
 
@@ -16,6 +17,12 @@ function isInfrastructurePath(pathname: string): boolean {
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
+
+	// Runs before anything else: a forged submission must not reach a load
+	// function or an action. See src/lib/server/csrf.ts for why this replaces
+	// SvelteKit's built-in check rather than relying on it.
+	const csrf = checkCsrf(event);
+	if (!csrf.ok) return csrfErrorResponse(csrf);
 
 	if (isInfrastructurePath(pathname)) {
 		event.locals.user = null;

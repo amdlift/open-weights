@@ -57,7 +57,7 @@ export const actions: Actions = {
 		// session created with it is retired here. The current browser gets a new
 		// one immediately so the user is not bounced back to the login form.
 		deleteAllSessionsForUser(user.id);
-		setSessionCookie(cookies, createSession(user.id));
+		setSessionCookie(cookies, createSession(user.id), request);
 
 		return { step: 'profile' as const };
 	},

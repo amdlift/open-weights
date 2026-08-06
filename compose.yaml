@@ -9,10 +9,20 @@ services:
     ports:
       - '${OPENWEIGHTS_PORT:-3000}:3000'
     environment:
-      # Required when the app sits behind a reverse proxy: the public origin,
-      # scheme included. Form submissions are rejected if this is wrong.
-      ORIGIN: ${OPENWEIGHTS_ORIGIN:-http://localhost:3000}
+      # Sets which calendar day a workout is filed under for new accounts.
       TZ: ${TZ:-UTC}
+      # Nothing else is needed. Reaching the app by IP, hostname or VPN name
+      # works as-is; cross-site form posts are still refused because the check
+      # compares the browser's Origin against the host it connected to.
+      #
+      # Behind a reverse proxy, only set these if it does NOT forward the
+      # original Host header:
+      #   ORIGIN: https://gym.example.com
+      # Or list extra public addresses (comma-separated):
+      #   TRUSTED_ORIGINS: https://gym.example.com,https://gym.tailnet.ts.net
+      #
+      # A TLS-terminating proxy should forward X-Forwarded-Proto (most do by
+      # default) so the session cookie is marked Secure.
     volumes:
       - openweights-data:/data
     # If you swap the named volume for a bind mount, uncomment this and set it

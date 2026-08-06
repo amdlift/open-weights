@@ -45,7 +45,7 @@ export const actions: Actions = {
 				password,
 				role: 'admin'
 			});
-			setSessionCookie(cookies, createSession(user.id));
+			setSessionCookie(cookies, createSession(user.id), request);
 		} catch (err) {
 			if (err instanceof UsernameTakenError) {
 				return fail(400, { ...values, error: err.message });

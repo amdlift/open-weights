@@ -62,7 +62,7 @@ export const actions: Actions = {
 
 		clearRateLimit(key);
 		pruneExpiredSessions();
-		setSessionCookie(cookies, createSession(user.id));
+		setSessionCookie(cookies, createSession(user.id), request);
 
 		redirect(303, redirectTo);
 	}

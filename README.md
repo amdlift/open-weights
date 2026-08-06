@@ -26,8 +26,6 @@ services:
     ports:
       - '3000:3000'
     environment:
-      # Must match the URL you actually browse to, scheme included.
-      ORIGIN: http://localhost:3000
       TZ: Europe/Berlin
     volumes:
       - openweights-data:/data
@@ -50,14 +48,34 @@ built-in exercises are applied on start.
 
 ### Configuration
 
+Nothing is required. Reaching the app at `http://<lan-ip>:3000`, by hostname, or
+over a VPN all work with no configuration.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ORIGIN` | — | Public origin, scheme included. **Required behind a reverse proxy** — SvelteKit rejects form posts whose `Origin` header does not match, so a wrong value looks like "nothing saves". |
 | `DATABASE_PATH` | `/data/openweights.db` | SQLite file. Must be on a writable volume. |
 | `PORT` / `HOST` | `3000` / `0.0.0.0` | HTTP listener. |
-| `BODY_SIZE_LIMIT` | `2M` | Maximum request body. |
-| `DISABLE_SIGNUP` | `0` | Set to `1` to refuse self-registration even before an admin exists. |
 | `TZ` | `UTC` | Fallback timezone for new accounts. Each user has their own in Settings. |
+| `DISABLE_SIGNUP` | `0` | Set to `1` to refuse self-registration even before an admin exists. |
+| `BODY_SIZE_LIMIT` | `2M` | Maximum request body. |
+| `TRUSTED_ORIGINS` | — | Comma-separated extra origins allowed to submit forms. Only needed for a reverse proxy that rewrites the `Host` header. |
+| `ORIGIN` | — | Public origin, scheme included. Optional; same purpose as `TRUSTED_ORIGINS` and also marks the session cookie `Secure` when it is `https://`. |
+
+### Behind a reverse proxy
+
+Usually nothing to do — if the proxy forwards the original `Host` header (nginx
+`proxy_set_header Host $host;`, Caddy and Traefik by default), forms work as-is.
+
+Two cases need a nudge:
+
+- **The proxy rewrites `Host`.** Set `TRUSTED_ORIGINS` (or `ORIGIN`) to the public
+  address, otherwise form posts are refused as cross-site.
+- **The proxy terminates TLS but strips `X-Forwarded-Proto`.** Set
+  `ORIGIN=https://your.domain` so the session cookie is marked `Secure`. Most
+  proxies send that header already.
+
+Both failures are explicit: you get a page naming the two addresses that failed
+to match, not a button that silently does nothing.
 
 ### Bind mounts
 

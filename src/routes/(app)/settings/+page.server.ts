@@ -133,7 +133,7 @@ export const actions: Actions = {
 		// Changing a password is also how you evict someone else who has it, so
 		// every other session goes; this browser is re-issued one.
 		deleteAllSessionsForUser(user.id);
-		setSessionCookie(cookies, createSession(user.id));
+		setSessionCookie(cookies, createSession(user.id), request);
 
 		return { section: 'password', saved: true };
 	}

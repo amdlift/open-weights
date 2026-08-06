@@ -201,13 +201,34 @@ export function toSessionUser(
 
 // --- cookie plumbing ------------------------------------------------------
 
-export function setSessionCookie(cookies: Cookies, token: string): void {
+/**
+ * Whether this request actually arrived over TLS.
+ *
+ * Deliberately *not* derived from `event.url`: with `ORIGIN` unset, adapter-node
+ * synthesises the origin from headers with the protocol defaulting to `https`,
+ * so `event.url.protocol` claims https on a plain-http LAN deployment. Marking
+ * the cookie `Secure` in that case makes the browser discard it, and the user
+ * signs in successfully only to be bounced straight back to the login form.
+ *
+ * Only explicit signals count: a proxy's `X-Forwarded-Proto`, or an `ORIGIN`
+ * the operator set themselves.
+ */
+function isSecureRequest(request: Request): boolean {
+	const forwarded = request.headers.get('x-forwarded-proto');
+	if (forwarded) return forwarded.split(',')[0].trim().toLowerCase() === 'https';
+
+	const origin = process.env.ORIGIN;
+	if (origin) return origin.toLowerCase().startsWith('https://');
+
+	return false;
+}
+
+export function setSessionCookie(cookies: Cookies, token: string, request: Request): void {
 	cookies.set(SESSION_COOKIE, token, {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
-		// Left to SvelteKit, which sets it for https origins. Forcing it on would
-		// break plain-http LAN deployments, which are common for self-hosting.
+		secure: isSecureRequest(request),
 		maxAge: Math.floor(SESSION_TTL_MS / 1000)
 	});
 }
