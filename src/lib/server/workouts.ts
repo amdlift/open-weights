@@ -419,7 +419,9 @@ export function createWorkoutFromRoutine(
 					.values({
 						workoutExerciseId,
 						orderIndex: i,
-						weightKg: item.targetWeightKg,
+						// No weight: a routine records the plan, not the load, which
+						// moves as you get stronger. The user fills it in from the bar.
+						weightKg: null,
 						// The bottom of a rep range is the commitment; anything above it
 						// is upside the user types in as they go.
 						reps: item.targetRepsMin,

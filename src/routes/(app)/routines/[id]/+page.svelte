@@ -6,17 +6,11 @@
 	import {
 		EXERCISE_KIND_LABELS,
 		MUSCLE_GROUP_LABELS,
+		RPE_VALUES,
 		fieldsForKind,
 		formatRepTarget
 	} from '$lib/constants';
-	import {
-		distanceUnit,
-		formatDuration,
-		fromKg,
-		fromMetres,
-		trimNumber,
-		weightUnit
-	} from '$lib/units';
+	import { distanceUnit, formatDuration, fromMetres, trimNumber } from '$lib/units';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -241,22 +235,21 @@
 					</div>
 				{/if}
 
-				{#if fields.weight}
+				{#if fields.rpe}
 					<div>
-						<label class="ow-label text-xs" for="weight-{item.id}">
-							Target {weightUnit(units)}
-						</label>
-						<input
-							id="weight-{item.id}"
-							name="targetWeight"
-							class="ow-input h-10 text-center tnum"
-							inputmode="decimal"
-							placeholder="—"
-							value={item.targetWeightKg == null
-								? ''
-								: trimNumber(fromKg(item.targetWeightKg, units), 2)}
+						<label class="ow-label text-xs" for="rpe-{item.id}">Target RPE</label>
+						<select
+							id="rpe-{item.id}"
+							name="targetRpe"
+							class="ow-input h-10 text-center"
+							value={item.targetRpe == null ? '' : String(item.targetRpe)}
 							onchange={submitOwnForm}
-						/>
+						>
+							<option value="">Optional</option>
+							{#each RPE_VALUES as value (value)}
+								<option value={String(value)}>{value}</option>
+							{/each}
+						</select>
 					</div>
 				{/if}
 

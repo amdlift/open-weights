@@ -13,13 +13,15 @@
 	let active = $derived(data.routines.filter((r) => !r.isArchived));
 	let archived = $derived(data.routines.filter((r) => r.isArchived));
 
-	/** "Back Squat 3×5", "Bench Press 3×8–12", or just the name if untargeted. */
+	/** "Back Squat 3×8–12 @8", or just the name when nothing is targeted. */
 	function describe(entry: PageData['routines'][number]['plan'][number]): string {
 		const reps = formatRepTarget(entry.targetRepsMin, entry.targetRepsMax);
-		if (entry.targetSets == null && reps === '—') return entry.name;
-		if (reps === '—') return `${entry.name} ${entry.targetSets}×`;
-		if (entry.targetSets == null) return `${entry.name} ${reps} reps`;
-		return `${entry.name} ${entry.targetSets}×${reps}`;
+		const rpe = entry.targetRpe == null ? '' : ` @${entry.targetRpe}`;
+
+		if (entry.targetSets == null && reps === '—') return `${entry.name}${rpe}`;
+		if (reps === '—') return `${entry.name} ${entry.targetSets}×${rpe}`;
+		if (entry.targetSets == null) return `${entry.name} ${reps} reps${rpe}`;
+		return `${entry.name} ${entry.targetSets}×${reps}${rpe}`;
 	}
 </script>
 

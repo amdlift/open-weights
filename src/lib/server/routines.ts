@@ -9,7 +9,7 @@ export type RoutineItem = {
 	targetSets: number | null;
 	targetRepsMin: number | null;
 	targetRepsMax: number | null;
-	targetWeightKg: number | null;
+	targetRpe: number | null;
 	targetDistanceM: number | null;
 	targetDurationS: number | null;
 	notes: string | null;
@@ -63,12 +63,13 @@ export type RoutineSummary = {
 	notes: string | null;
 	isArchived: boolean;
 	exerciseCount: number;
-	/** Enough to render "Back Squat 3×5 · Bench 3×8–12" without a second query. */
+	/** Enough to render "Back Squat 3×8–12 @8" without a second query. */
 	plan: Array<{
 		name: string;
 		targetSets: number | null;
 		targetRepsMin: number | null;
 		targetRepsMax: number | null;
+		targetRpe: number | null;
 	}>;
 };
 
@@ -88,7 +89,8 @@ export function listRoutines(userId: number, db: Db = getDb()): RoutineSummary[]
 			name: schema.exercises.name,
 			targetSets: schema.routineExercises.targetSets,
 			targetRepsMin: schema.routineExercises.targetRepsMin,
-			targetRepsMax: schema.routineExercises.targetRepsMax
+			targetRepsMax: schema.routineExercises.targetRepsMax,
+			targetRpe: schema.routineExercises.targetRpe
 		})
 		.from(schema.routineExercises)
 		.innerJoin(schema.exercises, eq(schema.exercises.id, schema.routineExercises.exerciseId))
@@ -131,7 +133,7 @@ export function getRoutine(
 			targetSets: schema.routineExercises.targetSets,
 			targetRepsMin: schema.routineExercises.targetRepsMin,
 			targetRepsMax: schema.routineExercises.targetRepsMax,
-			targetWeightKg: schema.routineExercises.targetWeightKg,
+			targetRpe: schema.routineExercises.targetRpe,
 			targetDistanceM: schema.routineExercises.targetDistanceM,
 			targetDurationS: schema.routineExercises.targetDurationS,
 			notes: schema.routineExercises.notes,
@@ -158,7 +160,7 @@ export function getRoutine(
 			targetSets: item.targetSets,
 			targetRepsMin: item.targetRepsMin,
 			targetRepsMax: item.targetRepsMax,
-			targetWeightKg: item.targetWeightKg,
+			targetRpe: item.targetRpe,
 			targetDistanceM: item.targetDistanceM,
 			targetDurationS: item.targetDurationS,
 			notes: item.notes,
@@ -189,10 +191,13 @@ export function createRoutine(
  * Snapshot a logged workout as a reusable routine.
  *
  * Targets come from the working sets only — a warm-up is a property of the day,
- * not of the plan. The weight recorded is the heaviest working set, which is
- * what a lifter means by "the weight I do on this", and the rep target becomes
- * the range that was actually performed: a session of 12/10/8 saves as 8–12
- * rather than pretending 12 was the plan for every set.
+ * not of the plan. The rep target becomes the range that was actually
+ * performed, so a session of 12/10/8 saves as 8–12 rather than pretending 12
+ * was the plan for every set, and the RPE target is the hardest working set,
+ * which is the effort the session was really run at.
+ *
+ * No weight is carried over: the load moves as you get stronger, so recording
+ * it would date the routine the moment you add 2.5 kg.
  */
 export function createRoutineFromWorkout(
 	userId: number,
@@ -225,7 +230,7 @@ export function createRoutineFromWorkout(
 			const stats = tx
 				.select({
 					setCount: sql<number>`count(*)`,
-					maxWeight: sql<number | null>`max(${schema.sets.weightKg})`,
+					maxRpe: sql<number | null>`max(${schema.sets.rpe})`,
 					minReps: sql<number | null>`min(${schema.sets.reps})`,
 					maxReps: sql<number | null>`max(${schema.sets.reps})`,
 					maxDistance: sql<number | null>`max(${schema.sets.distanceM})`,
@@ -249,7 +254,7 @@ export function createRoutineFromWorkout(
 					targetSets: stats?.setCount || null,
 					targetRepsMin: repsMin,
 					targetRepsMax: repsMax != null && repsMax !== repsMin ? repsMax : null,
-					targetWeightKg: stats?.maxWeight ?? null,
+					targetRpe: stats?.maxRpe ?? null,
 					targetDistanceM: stats?.maxDistance ?? null,
 					targetDurationS: stats?.maxDuration ?? null,
 					notes: item.notes
@@ -336,7 +341,7 @@ export type RoutineTargets = {
 	targetSets?: number | null;
 	targetRepsMin?: number | null;
 	targetRepsMax?: number | null;
-	targetWeightKg?: number | null;
+	targetRpe?: number | null;
 	targetDistanceM?: number | null;
 	targetDurationS?: number | null;
 	notes?: string | null;

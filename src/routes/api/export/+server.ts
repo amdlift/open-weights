@@ -92,7 +92,7 @@ export const GET: RequestHandler = ({ locals }) => {
 					targetSets: schema.routineExercises.targetSets,
 					targetRepsMin: schema.routineExercises.targetRepsMin,
 					targetRepsMax: schema.routineExercises.targetRepsMax,
-					targetWeightKg: schema.routineExercises.targetWeightKg,
+					targetRpe: schema.routineExercises.targetRpe,
 					targetDistanceM: schema.routineExercises.targetDistanceM,
 					targetDurationS: schema.routineExercises.targetDurationS,
 					notes: schema.routineExercises.notes,

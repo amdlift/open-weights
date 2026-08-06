@@ -260,7 +260,14 @@ export const routineExercises = sqliteTable(
 		 */
 		targetRepsMin: integer('target_reps'),
 		targetRepsMax: integer('target_reps_max'),
-		targetWeightKg: real('target_weight_kg'),
+		/**
+		 * How hard the work should feel, 6–10 in half points.
+		 *
+		 * There is deliberately no target weight: a routine is a plan you reuse
+		 * for months, and the load you handle on it moves the whole time. Effort
+		 * is the part that stays constant, so that is what the plan records.
+		 */
+		targetRpe: real('target_rpe'),
 		targetDistanceM: real('target_distance_m'),
 		targetDurationS: integer('target_duration_s'),
 		notes: text('notes')

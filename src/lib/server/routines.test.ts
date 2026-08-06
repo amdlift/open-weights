@@ -95,7 +95,13 @@ describe('rep range round trip', () => {
 
 		const [summary] = listRoutines(userId, db);
 		expect(summary.plan).toEqual([
-			{ name: 'Back Squat', targetSets: 3, targetRepsMin: 8, targetRepsMax: 12 }
+			{
+				name: 'Back Squat',
+				targetSets: 3,
+				targetRepsMin: 8,
+				targetRepsMax: 12,
+				targetRpe: null
+			}
 		]);
 	});
 
@@ -117,7 +123,7 @@ describe('createWorkoutFromRoutine with a rep range', () => {
 		updateRoutineItem(
 			userId,
 			itemId,
-			{ targetSets: 3, targetRepsMin: 8, targetRepsMax: 12, targetWeightKg: 100 },
+			{ targetSets: 3, targetRepsMin: 8, targetRepsMax: 12, targetRpe: 8 },
 			db
 		);
 
@@ -126,7 +132,12 @@ describe('createWorkoutFromRoutine with a rep range', () => {
 
 		expect(sets).toHaveLength(3);
 		expect(sets.map((s) => s.reps)).toEqual([8, 8, 8]);
-		expect(sets.map((s) => s.weightKg)).toEqual([100, 100, 100]);
+		// No weight comes from the routine — the load moves over time, so the
+		// user reads it off the bar rather than off a months-old plan.
+		expect(sets.map((s) => s.weightKg)).toEqual([null, null, null]);
+		// RPE is an outcome, not an instruction: prefilling it would record an
+		// effort the user never actually reported.
+		expect(sets.map((s) => s.rpe)).toEqual([null, null, null]);
 		// Prefilled sets are a suggestion until the user confirms them.
 		expect(sets.every((s) => !s.isCompleted)).toBe(true);
 	});
@@ -205,6 +216,39 @@ describe('createRoutineFromWorkout derives the range that was performed', () => 
 		const [item] = getRoutine(userId, routineId, db)!.exercises;
 		expect(item.targetRepsMin).toBe(8);
 		expect(item.targetRepsMax).toBe(10);
+	});
+
+	it('carries the hardest working set as the RPE target', () => {
+		const workoutId = createWorkout(userId, { performedOn: '2026-08-06' }, db);
+		const weId = addExerciseToWorkout(userId, workoutId, squatId, db)!;
+		for (const set of [
+			{ rpe: 10, isWarmup: true }, // a warm-up cannot set the target
+			{ rpe: 7, isWarmup: false },
+			{ rpe: 8.5, isWarmup: false }
+		]) {
+			addSet(
+				userId,
+				weId,
+				{
+					weightKg: 100,
+					reps: 5,
+					rpe: set.rpe,
+					distanceM: null,
+					durationS: null,
+					isWarmup: set.isWarmup
+				},
+				db
+			);
+		}
+
+		const routineId = createRoutineFromWorkout(userId, workoutId, 'Strength', db)!;
+		expect(getRoutine(userId, routineId, db)!.exercises[0].targetRpe).toBe(8.5);
+	});
+
+	it('leaves the RPE target empty when none was recorded', () => {
+		const workoutId = logWorkout([5, 5]);
+		const routineId = createRoutineFromWorkout(userId, workoutId, 'Strength', db)!;
+		expect(getRoutine(userId, routineId, db)!.exercises[0].targetRpe).toBeNull();
 	});
 
 	it('leaves the rep target empty for cardio', () => {

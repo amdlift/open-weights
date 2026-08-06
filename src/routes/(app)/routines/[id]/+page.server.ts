@@ -4,8 +4,8 @@ import {
 	readDistanceM,
 	readDurationS,
 	readInteger,
-	readTrimmedText,
-	readWeightKg
+	readRpe,
+	readTrimmedText
 } from '$lib/server/form-values';
 import {
 	addExerciseToRoutine,
@@ -84,8 +84,8 @@ export const actions: Actions = {
 			targets.targetRepsMin = reps.min;
 			targets.targetRepsMax = reps.max;
 		}
-		const targetWeightKg = readWeightKg(form, 'targetWeight', user.unitSystem);
-		if (targetWeightKg !== undefined) targets.targetWeightKg = targetWeightKg;
+		const targetRpe = readRpe(form, 'targetRpe');
+		if (targetRpe !== undefined) targets.targetRpe = targetRpe;
 		const targetDistanceM = readDistanceM(form, 'targetDistance', user.unitSystem);
 		if (targetDistanceM !== undefined) targets.targetDistanceM = targetDistanceM;
 		const targetDurationS = readDurationS(form, 'targetDuration');
