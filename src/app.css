@@ -1,0 +1,181 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Runtime theme tokens. Everything the UI paints with resolves through these,
+ * so the light/dark switch is a single class on <html> and chart components can
+ * read the same values via getComputedStyle.
+ */
+:root,
+:root.light {
+	--ow-bg: oklch(0.985 0.002 265);
+	--ow-surface: oklch(1 0 0);
+	--ow-surface-2: oklch(0.968 0.003 265);
+	--ow-border: oklch(0.906 0.005 265);
+	--ow-border-strong: oklch(0.83 0.008 265);
+	--ow-text: oklch(0.21 0.012 265);
+	--ow-muted: oklch(0.49 0.014 265);
+	--ow-faint: oklch(0.63 0.012 265);
+	--ow-primary: oklch(0.52 0.19 264);
+	--ow-primary-hover: oklch(0.46 0.19 264);
+	--ow-on-primary: oklch(1 0 0);
+	--ow-primary-soft: oklch(0.94 0.035 264);
+	--ow-success: oklch(0.55 0.14 155);
+	--ow-warning: oklch(0.68 0.15 75);
+	--ow-danger: oklch(0.55 0.2 25);
+	--ow-danger-soft: oklch(0.95 0.03 25);
+	--ow-ring: oklch(0.52 0.19 264 / 0.45);
+
+	/*
+	 * Categorical series colours. Fixed order, never cycled — a series keeps its
+	 * hue no matter how many others are on screen. Validated against the light
+	 * surface (#ffffff) for lightness band, chroma floor, CVD separation and
+	 * normal-vision separation on the adjacent pairlist; see
+	 * src/lib/components/charts/README.md before changing any of these.
+	 */
+	--ow-series-1: #2a78d6;
+	--ow-series-2: #eb6834;
+	--ow-series-3: #1baf7a;
+	--ow-series-4: #eda100;
+	--ow-series-5: #e87ba4;
+	--ow-series-6: #4a3aa7;
+	/* Recessive gray for context marks that are not a series. */
+	--ow-series-muted: oklch(0.78 0.01 265);
+}
+
+:root.dark {
+	--ow-bg: oklch(0.185 0.008 265);
+	--ow-surface: oklch(0.225 0.009 265);
+	--ow-surface-2: oklch(0.265 0.01 265);
+	--ow-border: oklch(0.318 0.011 265);
+	--ow-border-strong: oklch(0.42 0.014 265);
+	--ow-text: oklch(0.955 0.004 265);
+	--ow-muted: oklch(0.73 0.012 265);
+	--ow-faint: oklch(0.58 0.012 265);
+	--ow-primary: oklch(0.68 0.16 264);
+	--ow-primary-hover: oklch(0.74 0.16 264);
+	--ow-on-primary: oklch(0.17 0.02 264);
+	--ow-primary-soft: oklch(0.32 0.07 264);
+	--ow-success: oklch(0.72 0.15 155);
+	--ow-warning: oklch(0.79 0.15 75);
+	--ow-danger: oklch(0.68 0.18 25);
+	--ow-danger-soft: oklch(0.32 0.08 25);
+	--ow-ring: oklch(0.68 0.16 264 / 0.5);
+
+	/* The same six hues re-stepped for the dark surface (#1a1c20), validated
+	 * separately — not an automatic lightening of the light values. */
+	--ow-series-1: #3987e5;
+	--ow-series-2: #d95926;
+	--ow-series-3: #199e70;
+	--ow-series-4: #c98500;
+	--ow-series-5: #d55181;
+	--ow-series-6: #9085e9;
+	--ow-series-muted: oklch(0.45 0.012 265);
+}
+
+@theme inline {
+	--color-bg: var(--ow-bg);
+	--color-surface: var(--ow-surface);
+	--color-surface-2: var(--ow-surface-2);
+	--color-border-base: var(--ow-border);
+	--color-border-strong: var(--ow-border-strong);
+	--color-text-base: var(--ow-text);
+	--color-muted: var(--ow-muted);
+	--color-faint: var(--ow-faint);
+	--color-primary: var(--ow-primary);
+	--color-primary-hover: var(--ow-primary-hover);
+	--color-on-primary: var(--ow-on-primary);
+	--color-primary-soft: var(--ow-primary-soft);
+	--color-success: var(--ow-success);
+	--color-warning: var(--ow-warning);
+	--color-danger: var(--ow-danger);
+	--color-danger-soft: var(--ow-danger-soft);
+
+	--font-sans:
+		ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+		sans-serif;
+	--font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+}
+
+@layer base {
+	html {
+		background-color: var(--ow-bg);
+		color: var(--ow-text);
+		-webkit-text-size-adjust: 100%;
+	}
+
+	body {
+		min-height: 100dvh;
+		font-family: var(--font-sans);
+		/* Avoid iOS zoom-on-focus; inputs are re-sized to 16px explicitly below. */
+		overscroll-behavior-y: none;
+	}
+
+	*,
+	::before,
+	::after {
+		border-color: var(--ow-border);
+	}
+
+	:focus-visible {
+		outline: 2px solid var(--ow-primary);
+		outline-offset: 2px;
+	}
+
+	/* Numeric fields read much better with tabular figures in set tables. */
+	input[type='number'],
+	.tnum {
+		font-variant-numeric: tabular-nums;
+	}
+
+	input[type='number']::-webkit-outer-spin-button,
+	input[type='number']::-webkit-inner-spin-button {
+		-webkit-appearance: none;
+		margin: 0;
+	}
+
+	input[type='number'] {
+		-moz-appearance: textfield;
+		appearance: textfield;
+	}
+}
+
+/*
+ * Shared component classes. These are @utility rather than plain classes in a
+ * @layer so that other rules (and markup) can `@apply` them.
+ */
+@utility ow-card {
+	@apply rounded-xl border border-border-base bg-surface;
+}
+
+@utility ow-input {
+	@apply w-full rounded-lg border border-border-base bg-surface px-3 py-2 text-base
+		text-text-base placeholder:text-faint focus:border-primary focus:outline-none;
+}
+
+@utility ow-label {
+	@apply mb-1.5 block text-sm font-medium text-muted;
+}
+
+@utility ow-btn {
+	@apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm
+		font-semibold transition-colors select-none disabled:pointer-events-none
+		disabled:opacity-50;
+}
+
+@utility ow-btn-primary {
+	@apply ow-btn bg-primary text-on-primary hover:bg-primary-hover;
+}
+
+@utility ow-btn-secondary {
+	@apply ow-btn border border-border-strong bg-surface text-text-base hover:bg-surface-2;
+}
+
+@utility ow-btn-ghost {
+	@apply ow-btn text-muted hover:bg-surface-2 hover:text-text-base;
+}
+
+@utility ow-btn-danger {
+	@apply ow-btn bg-danger text-white hover:opacity-90;
+}

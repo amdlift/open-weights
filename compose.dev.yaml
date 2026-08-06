@@ -1,0 +1,24 @@
+# Development compose file. The host has no node on PATH, so the dev server,
+# tests and any npm command all run inside this container.
+#
+#   docker compose -f compose.dev.yaml up          # vite dev on :5173
+#   docker compose -f compose.dev.yaml run --rm app npm run check
+#
+services:
+  app:
+    image: node:24-bookworm-slim
+    working_dir: /app
+    # Host uid/gid so files written into the bind mount stay owned by the user.
+    user: '1000:100'
+    command: sh -c "npm install --no-audit --no-fund && npm run dev"
+    environment:
+      NODE_ENV: development
+      DATABASE_PATH: /app/data/openweights.db
+      npm_config_cache: /app/.npm-cache
+      HOME: /app
+    ports:
+      - '5173:5173'
+    volumes:
+      - .:/app
+    tmpfs:
+      - /tmp

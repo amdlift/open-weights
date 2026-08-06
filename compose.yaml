@@ -1,0 +1,23 @@
+# Production compose file — this is what users of the published image run.
+services:
+  openweights:
+    image: ${OPENWEIGHTS_IMAGE:-amdlift/openweights:latest}
+    # Uncomment to build locally instead of pulling:
+    # build: .
+    container_name: openweights
+    restart: unless-stopped
+    ports:
+      - '${OPENWEIGHTS_PORT:-3000}:3000'
+    environment:
+      # Required when the app sits behind a reverse proxy: the public origin,
+      # scheme included. Form submissions are rejected if this is wrong.
+      ORIGIN: ${OPENWEIGHTS_ORIGIN:-http://localhost:3000}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - openweights-data:/data
+    # If you swap the named volume for a bind mount, uncomment this and set it
+    # to the owner of the host directory:
+    # user: "1000:1000"
+
+volumes:
+  openweights-data:

@@ -1,0 +1,13 @@
+node_modules
+build
+.svelte-kit
+data
+*.db
+*.db-shm
+*.db-wal
+.git
+.github
+.env
+.env.*
+compose*.yaml
+README.md

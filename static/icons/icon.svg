@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+	<!--
+		Maskable source icon. The mark sits inside the middle 60% so that a
+		platform cropping it to a circle or squircle never clips the plates.
+	-->
+	<rect width="512" height="512" fill="#2d5ed4" />
+	<g fill="#ffffff">
+		<rect x="112" y="230" width="26" height="52" rx="11" />
+		<rect x="150" y="205" width="38" height="102" rx="15" />
+		<rect x="324" y="205" width="38" height="102" rx="15" />
+		<rect x="374" y="230" width="26" height="52" rx="11" />
+		<rect x="184" y="240" width="144" height="32" rx="13" />
+	</g>
+</svg>

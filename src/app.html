@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" class="%owTheme%">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<meta name="color-scheme" content="light dark" />
+		<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)" />
+		<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+		<meta name="mobile-web-app-capable" content="yes" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+		<link rel="apple-touch-icon" href="%sveltekit.assets%/icons/icon-192.png" />
+		<link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
+		%sveltekit.head%
+		<script>
+			// hooks.server.ts stamps the saved preference into the class list. Anything
+			// other than an explicit light/dark means "follow the system" — resolve it
+			// before first paint so there is no flash.
+			(() => {
+				const root = document.documentElement;
+				if (!root.classList.contains('dark') && !root.classList.contains('light')) {
+					root.className = window.matchMedia('(prefers-color-scheme: dark)').matches
+						? 'dark'
+						: 'light';
+				}
+			})();
+		</script>
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>
