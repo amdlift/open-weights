@@ -9,8 +9,10 @@ import {
 	formatWeight,
 	fromKg,
 	fromMetres,
+	kgToLb,
 	parseDuration,
 	parseOptionalNumber,
+	roundToLoadable,
 	toKg,
 	toMetres,
 	trimNumber
@@ -159,5 +161,27 @@ describe('trimNumber', () => {
 		expect(trimNumber(100.04, 1)).toBe('100');
 		expect(trimNumber(100.06, 1)).toBe('100.1');
 		expect(trimNumber(5, 2)).toBe('5');
+	});
+});
+
+describe('roundToLoadable', () => {
+	it('snaps to the nearest 2.5 kg in a metric gym', () => {
+		expect(roundToLoadable(102.6, 'metric')).toBe(102.5);
+		expect(roundToLoadable(103.8, 'metric')).toBe(105);
+		expect(roundToLoadable(105, 'metric')).toBe(105);
+	});
+
+	it('snaps to the nearest 5 lb in an imperial gym', () => {
+		// Rounding in kg and converting for display is the bug this prevents:
+		// it would hand the lifter 226.2 lb, which is not a weight.
+		expect(kgToLb(roundToLoadable(102.6, 'imperial'))).toBeCloseTo(225, 9);
+		expect(kgToLb(roundToLoadable(104.5, 'imperial'))).toBeCloseTo(230, 9);
+	});
+
+	it('never lands between plates in either system', () => {
+		for (const kg of [40.3, 77.7, 102.6, 181.1]) {
+			expect(roundToLoadable(kg, 'metric') % 2.5).toBeCloseTo(0, 9);
+			expect(kgToLb(roundToLoadable(kg, 'imperial')) % 5).toBeCloseTo(0, 9);
+		}
 	});
 });

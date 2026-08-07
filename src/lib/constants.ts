@@ -74,6 +74,42 @@ export function supportsOneRm(kind: ExerciseKind): boolean {
 	return kind === 'weight_reps' || kind === 'weighted_bodyweight';
 }
 
+/**
+ * How a program prescribes effort for one exercise.
+ *
+ * `percent_1rm` is only offered where `supportsOneRm` holds — a percentage of a
+ * plank is not a number anyone can load. A null mode means the plan prescribes
+ * sets and reps but says nothing about how hard they should feel.
+ */
+export const INTENSITY_MODES = ['rpe', 'percent_1rm'] as const;
+export type IntensityMode = (typeof INTENSITY_MODES)[number];
+
+export const INTENSITY_MODE_LABELS: Record<IntensityMode, string> = {
+	rpe: 'RPE',
+	percent_1rm: '% 1RM'
+};
+
+/** A plan can prescribe many sets, but not an unbounded number of empty rows. */
+export const MAX_PRESCRIBED_SETS = 20;
+
+/**
+ * Render a prescription's intensity: `@8`, `75%`, or an em dash. The
+ * counterpart to `formatRepTarget`.
+ */
+export function formatIntensity(
+	mode: IntensityMode | null | undefined,
+	rpe: number | null | undefined,
+	percentOneRm: number | null | undefined
+): string {
+	if (mode === 'rpe' && rpe != null) return `@${trimTrailingZero(rpe)}`;
+	if (mode === 'percent_1rm' && percentOneRm != null) return `${trimTrailingZero(percentOneRm)}%`;
+	return '—';
+}
+
+function trimTrailingZero(value: number): string {
+	return String(Number(value.toFixed(1)));
+}
+
 /** True when sets of this kind contribute weight × reps to volume totals. */
 export function supportsVolume(kind: ExerciseKind): boolean {
 	return kind === 'weight_reps' || kind === 'weighted_bodyweight';

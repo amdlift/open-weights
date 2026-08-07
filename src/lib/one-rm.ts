@@ -13,6 +13,20 @@ import type { OneRmFormula } from '$lib/constants';
 /** Sets above this rep count are not used for 1RM estimation. */
 export const MAX_REPS_FOR_ESTIMATE = 12;
 
+/**
+ * The load a given percentage of a max works out to — the inverse of
+ * `estimateOneRm`, and just as much an estimate. Only ever a starting point the
+ * lifter overwrites from the bar.
+ */
+export function percentOfOneRm(
+	oneRmKg: number | null | undefined,
+	percent: number | null | undefined
+): number | null {
+	if (oneRmKg == null || percent == null) return null;
+	if (oneRmKg <= 0 || percent <= 0) return null;
+	return (oneRmKg * percent) / 100;
+}
+
 export const ONE_RM_FORMULA_LABELS: Record<OneRmFormula, string> = {
 	epley: 'Epley',
 	brzycki: 'Brzycki',

@@ -37,6 +37,28 @@ export function formatWeight(kg: number | null | undefined, system: UnitSystem):
 	return `${trimNumber(fromKg(kg, system), 1)} ${weightUnit(system)}`;
 }
 
+/**
+ * The smallest jump a normal gym can make: a pair of 1.25 kg plates in a metric
+ * gym, a pair of 2.5 lb plates in an imperial one.
+ */
+export const LOADABLE_STEP_KG = 2.5;
+export const LOADABLE_STEP_LB = 5;
+
+/**
+ * Round a computed load to something the user can actually put on the bar.
+ *
+ * The increment belongs to the plates in the room, not to the unit the number
+ * happens to be stored in — rounding to 2.5 kg and then displaying it hands an
+ * imperial lifter 172.6 lb, which is not a weight. So the rounding happens in
+ * the user's own system and converts back. Takes and returns kg, so no
+ * already-converted value ever escapes this module.
+ */
+export function roundToLoadable(kg: number, system: UnitSystem): number {
+	const step = system === 'imperial' ? LOADABLE_STEP_LB : LOADABLE_STEP_KG;
+	const rounded = Math.round(fromKg(kg, system) / step) * step;
+	return toKg(rounded, system);
+}
+
 // --- length / height ------------------------------------------------------
 
 export const cmToInch = (cm: number): number => cm / CM_PER_INCH;

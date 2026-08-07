@@ -11,8 +11,15 @@ import {
 	normaliseRepTarget,
 	updateRoutineItem
 } from './routines';
-import { addExerciseToWorkout, addSet, createWorkout, getWorkout } from './workouts';
-import { createWorkoutFromRoutine } from './workouts';
+import {
+	addExerciseToWorkout,
+	addSet,
+	createWorkout,
+	createWorkoutFromRoutine,
+	finishWorkout,
+	getWorkout,
+	updateSet
+} from './workouts';
 
 let db: Db;
 let userId: number;
@@ -116,8 +123,8 @@ describe('rep range round trip', () => {
 	});
 });
 
-describe('createWorkoutFromRoutine with a rep range', () => {
-	it('prefills the bottom of the range', () => {
+describe('createWorkoutFromRoutine writes a plan, not a record', () => {
+	it('carries the whole rep range as a target', () => {
 		const routineId = createRoutine(userId, { name: 'Upper A' }, db);
 		const itemId = addExerciseToRoutine(userId, routineId, squatId, db)!;
 		updateRoutineItem(
@@ -131,26 +138,103 @@ describe('createWorkoutFromRoutine with a rep range', () => {
 		const sets = getWorkout(userId, workoutId, db)!.exercises[0].sets;
 
 		expect(sets).toHaveLength(3);
-		expect(sets.map((s) => s.reps)).toEqual([8, 8, 8]);
+		// Nothing is measured until the user says so. Writing the target into
+		// `reps` would record three sets of eight that nobody performed.
+		expect(sets.map((s) => s.reps)).toEqual([null, null, null]);
+		expect(sets.map((s) => s.targetRepsMin)).toEqual([8, 8, 8]);
+		// The top of the range survives now; it used to be dropped on the way in.
+		expect(sets.map((s) => s.targetRepsMax)).toEqual([12, 12, 12]);
 		// No weight comes from the routine — the load moves over time, so the
 		// user reads it off the bar rather than off a months-old plan.
 		expect(sets.map((s) => s.weightKg)).toEqual([null, null, null]);
+		expect(sets.map((s) => s.targetWeightKg)).toEqual([null, null, null]);
 		// RPE is an outcome, not an instruction: prefilling it would record an
 		// effort the user never actually reported.
 		expect(sets.map((s) => s.rpe)).toEqual([null, null, null]);
+		// But the instruction itself is kept, where it used to vanish entirely.
+		expect(sets.map((s) => s.targetRpe)).toEqual([8, 8, 8]);
 		// Prefilled sets are a suggestion until the user confirms them.
 		expect(sets.every((s) => !s.isCompleted)).toBe(true);
 	});
 
-	it('prefills an exact target unchanged', () => {
+	it('carries an exact target unchanged', () => {
 		const routineId = createRoutine(userId, { name: 'Strength' }, db);
 		const itemId = addExerciseToRoutine(userId, routineId, squatId, db)!;
 		updateRoutineItem(userId, itemId, { targetSets: 2, targetRepsMin: 5 }, db);
 
 		const workoutId = createWorkoutFromRoutine(userId, routineId, '2026-08-06', db)!;
-		expect(
-			getWorkout(userId, workoutId, db)!.exercises[0].sets.map((s) => s.reps)
-		).toEqual([5, 5]);
+		const sets = getWorkout(userId, workoutId, db)!.exercises[0].sets;
+		expect(sets.map((s) => s.targetRepsMin)).toEqual([5, 5]);
+		expect(sets.map((s) => s.targetRepsMax)).toEqual([null, null]);
+	});
+
+	it('prescribes cardio distance and time as targets too', () => {
+		const routineId = createRoutine(userId, { name: 'Conditioning' }, db);
+		const itemId = addExerciseToRoutine(userId, routineId, runId, db)!;
+		updateRoutineItem(
+			userId,
+			itemId,
+			{ targetSets: 1, targetDistanceM: 5000, targetDurationS: 1500 },
+			db
+		);
+
+		const workoutId = createWorkoutFromRoutine(userId, routineId, '2026-08-06', db)!;
+		const [set] = getWorkout(userId, workoutId, db)!.exercises[0].sets;
+
+		// These used to be written straight into the measurement columns, which
+		// logged a 5 km run the moment you opened the session.
+		expect(set.distanceM).toBeNull();
+		expect(set.durationS).toBeNull();
+		expect(set.targetDistanceM).toBe(5000);
+		expect(set.targetDurationS).toBe(1500);
+	});
+});
+
+describe('finishing drops the prescribed sets nobody did', () => {
+	function startThreeSets() {
+		const routineId = createRoutine(userId, { name: 'Upper A' }, db);
+		const itemId = addExerciseToRoutine(userId, routineId, squatId, db)!;
+		updateRoutineItem(userId, itemId, { targetSets: 3, targetRepsMin: 5 }, db);
+		const workoutId = createWorkoutFromRoutine(userId, routineId, '2026-08-06', db)!;
+		return { workoutId, sets: getWorkout(userId, workoutId, db)!.exercises[0].sets };
+	}
+
+	it('keeps what was performed and drops what was not', () => {
+		const { workoutId, sets } = startThreeSets();
+		updateSet(userId, sets[0].id, { weightKg: 100, reps: 5, isCompleted: true } as never, db);
+		updateSet(userId, sets[1].id, { weightKg: 100, reps: 4, isCompleted: true } as never, db);
+
+		finishWorkout(userId, workoutId, db);
+
+		const after = getWorkout(userId, workoutId, db)!.exercises[0].sets;
+		expect(after).toHaveLength(2);
+		expect(after.map((s) => s.reps)).toEqual([5, 4]);
+		expect(after.every((s) => s.isCompleted)).toBe(true);
+	});
+
+	it('keeps a set with numbers in it that was never ticked off', () => {
+		const { workoutId, sets } = startThreeSets();
+		// Typed but not confirmed. The numbers are the record; the tick is only a
+		// shortcut for typing them.
+		updateSet(userId, sets[0].id, { weightKg: 100, reps: 5 } as never, db);
+		updateSet(userId, sets[1].id, { isCompleted: false } as never, db);
+		updateSet(userId, sets[2].id, { isCompleted: false } as never, db);
+
+		finishWorkout(userId, workoutId, db);
+
+		const after = getWorkout(userId, workoutId, db)!.exercises[0].sets;
+		expect(after).toHaveLength(1);
+		expect(after[0].weightKg).toBe(100);
+	});
+
+	it('leaves an untouched routine workout with nothing to show for it', () => {
+		const { workoutId } = startThreeSets();
+
+		finishWorkout(userId, workoutId, db);
+
+		// Opening a session and walking out is not three sets of five. The
+		// exercise stays, so the day still says what was planned.
+		expect(getWorkout(userId, workoutId, db)!.exercises[0].sets).toEqual([]);
 	});
 });
 

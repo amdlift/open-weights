@@ -205,9 +205,10 @@ export function countExerciseUses(userId: number, exerciseId: number, db: Db = g
 }
 
 /**
- * Delete a custom exercise outright. Refused once it appears in a workout or a
- * routine — that history would otherwise lose its label. Callers fall back to
- * hiding it.
+ * Delete a custom exercise outright. Refused once it appears in a workout, a
+ * routine or a program — that history would otherwise lose its label, and the
+ * `restrict` foreign keys would raise a constraint error rather than a sentence
+ * anyone could act on. Callers fall back to hiding it.
  */
 export function deleteCustomExercise(
 	userId: number,
@@ -236,8 +237,22 @@ export function deleteCustomExercise(
 				.from(schema.routineExercises)
 				.where(eq(schema.routineExercises.exerciseId, exerciseId))
 				.get()?.value ?? 0;
+		const inPrograms =
+			tx
+				.select({ value: sql<number>`count(*)` })
+				.from(schema.programDayExercises)
+				.where(eq(schema.programDayExercises.exerciseId, exerciseId))
+				.get()?.value ?? 0;
+		const inSnapshots =
+			tx
+				.select({ value: sql<number>`count(*)` })
+				.from(schema.programOneRms)
+				.where(eq(schema.programOneRms.exerciseId, exerciseId))
+				.get()?.value ?? 0;
 
-		if (inWorkouts > 0 || inRoutines > 0) return { deleted: false, reason: 'in_use' as const };
+		if (inWorkouts > 0 || inRoutines > 0 || inPrograms > 0 || inSnapshots > 0) {
+			return { deleted: false, reason: 'in_use' as const };
+		}
 
 		tx.delete(schema.userHiddenExercises)
 			.where(eq(schema.userHiddenExercises.exerciseId, exerciseId))

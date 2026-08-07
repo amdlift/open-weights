@@ -46,6 +46,42 @@
 		</p>
 	</div>
 
+	{#if data.upNext}
+		<div class="ow-card border-primary/40 p-4">
+			<h2 class="text-sm font-semibold">
+				{data.upNext.resumeWorkoutId ? 'Your program, in progress' : 'Next in your program'}
+			</h2>
+			<p class="mt-1 text-sm text-muted">
+				{data.upNext.programName} · week {data.upNext.weekNumber} ·
+				{data.upNext.title || `day ${data.upNext.dayNumber}`}
+			</p>
+			{#if data.upNext.exerciseNames.length > 0}
+				<p class="mt-1 truncate text-xs text-faint">
+					{data.upNext.exerciseNames.join(' · ')}
+				</p>
+			{/if}
+
+			{#if data.upNext.resumeWorkoutId}
+				<a href="/workouts/{data.upNext.resumeWorkoutId}" class="ow-btn-primary mt-4 w-full">
+					<Icon name="chevronRight" size={16} />
+					Resume it
+				</a>
+			{:else}
+				<!-- Honours the date picker above: logging Tuesday's session on
+				     Wednesday is exactly the point of letting the dates float. -->
+				<form method="POST" use:enhance>
+					<input type="hidden" name="performedOn" value={performedOn} />
+					<input type="hidden" name="programDayId" value={data.upNext.programDayId} />
+					<input type="hidden" name="enrollmentId" value={data.upNext.enrollmentId} />
+					<button type="submit" class="ow-btn-primary mt-4 w-full">
+						<Icon name="plus" size={16} />
+						Start this session
+					</button>
+				</form>
+			{/if}
+		</div>
+	{/if}
+
 	<form
 		id="start-empty"
 		method="POST"

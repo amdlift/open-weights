@@ -1,8 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { and, asc, eq, sql } from 'drizzle-orm';
 import { isIsoDate, todayIn } from '$lib/dates';
-import { getDb } from '$lib/server/db';
-import * as schema from '$lib/server/db/schema';
+import { getActiveUpNext, startProgramDay } from '$lib/server/programs';
+import { listRoutines } from '$lib/server/routines';
 import { createWorkout, createWorkoutFromRoutine } from '$lib/server/workouts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -14,24 +13,11 @@ export const load: PageServerLoad = ({ locals, url }) => {
 	const requested = url.searchParams.get('date');
 	const performedOn = requested && isIsoDate(requested) ? requested : today;
 
-	const routines = getDb()
-		.select({
-			id: schema.routines.id,
-			name: schema.routines.name,
-			notes: schema.routines.notes,
-			exerciseCount: sql<number>`count(${schema.routineExercises.id})`
-		})
-		.from(schema.routines)
-		.leftJoin(
-			schema.routineExercises,
-			eq(schema.routineExercises.routineId, schema.routines.id)
-		)
-		.where(and(eq(schema.routines.userId, user.id), eq(schema.routines.isArchived, false)))
-		.groupBy(schema.routines.id)
-		.orderBy(asc(schema.routines.name))
-		.all();
-
-	return { performedOn, routines };
+	return {
+		performedOn,
+		upNext: getActiveUpNext(user.id),
+		routines: listRoutines(user.id).filter((routine) => !routine.isArchived)
+	};
 };
 
 export const actions: Actions = {
@@ -42,8 +28,30 @@ export const actions: Actions = {
 		const performedOn = String(form.get('performedOn') ?? '');
 		if (!isIsoDate(performedOn)) return fail(400, { error: 'Choose a valid date.' });
 
-		const routineIdRaw = String(form.get('routineId') ?? '');
+		// Program first, then routine, then blank. Stated rather than left to the
+		// order these branches happen to be written in.
+		const programDayIdRaw = String(form.get('programDayId') ?? '');
+		if (programDayIdRaw) {
+			const programDayId = Number(programDayIdRaw);
+			const enrollmentId = Number(form.get('enrollmentId'));
+			if (!Number.isInteger(programDayId) || !Number.isInteger(enrollmentId)) {
+				return fail(400, { error: 'That program session no longer exists.' });
+			}
 
+			const result = startProgramDay(user.id, enrollmentId, programDayId, {
+				performedOn,
+				units: user.unitSystem
+			});
+			if (result.reason === 'enrollment_closed') {
+				return fail(400, { error: 'That run is finished. Start the program again to keep going.' });
+			}
+			if (result.workoutId == null) {
+				return fail(400, { error: 'That program session no longer exists.' });
+			}
+			redirect(303, `/workouts/${result.workoutId}`);
+		}
+
+		const routineIdRaw = String(form.get('routineId') ?? '');
 		if (routineIdRaw) {
 			const routineId = Number(routineIdRaw);
 			const workoutId = Number.isInteger(routineId)

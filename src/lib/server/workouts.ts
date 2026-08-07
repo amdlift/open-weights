@@ -1,6 +1,8 @@
-import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { MAX_PRESCRIBED_SETS } from '$lib/constants';
 import type { EquipmentType, ExerciseKind, MuscleGroup } from '$lib/constants';
 import type { IsoDate } from '$lib/dates';
+import type { ResolvedPrescription } from '$lib/prescription';
 import { getDb, type Db } from './db';
 import * as schema from './db/schema';
 
@@ -13,11 +15,26 @@ export type SetInput = {
 	isWarmup: boolean;
 };
 
-export type WorkoutSetRow = SetInput & {
-	id: number;
-	orderIndex: number;
-	isCompleted: boolean;
-};
+export type WorkoutSetRow = SetInput &
+	ResolvedPrescription & {
+		id: number;
+		orderIndex: number;
+		isCompleted: boolean;
+	};
+
+/** Read a set row's prescription back out. Written once and used by every
+ *  place that maps a `sets` row into a `WorkoutSetRow`. */
+function targetsOf(set: schema.WorkoutSet): ResolvedPrescription {
+	return {
+		targetWeightKg: set.targetWeightKg,
+		targetRepsMin: set.targetRepsMin,
+		targetRepsMax: set.targetRepsMax,
+		targetRpe: set.targetRpe,
+		targetPercentOneRm: set.targetPercentOneRm,
+		targetDistanceM: set.targetDistanceM,
+		targetDurationS: set.targetDurationS
+	};
+}
 
 export type WorkoutExerciseRow = {
 	id: number;
@@ -111,6 +128,10 @@ export type WorkoutSummary = {
 	performedOn: IsoDate;
 	title: string | null;
 	notes: string | null;
+	/** Whether the session was ever finished, for an "in progress" marker. */
+	isFinished: boolean;
+	/** Where in a program this came from, or null for freeform and routine work. */
+	program: { name: string; weekNumber: number; dayNumber: number } | null;
 	exerciseCount: number;
 	setCount: number;
 	totalVolumeKg: number;
@@ -138,9 +159,17 @@ export function listWorkoutSummaries(
 			id: schema.workouts.id,
 			performedOn: schema.workouts.performedOn,
 			title: schema.workouts.title,
-			notes: schema.workouts.notes
+			notes: schema.workouts.notes,
+			endedAt: schema.workouts.endedAt,
+			programName: schema.programs.name,
+			weekNumber: schema.programDays.weekNumber,
+			dayOrderIndex: schema.programDays.orderIndex
 		})
 		.from(schema.workouts)
+		// Left joins: a workout whose program was deleted keeps its link nulled
+		// and simply reports no program, which is the honest answer.
+		.leftJoin(schema.programDays, eq(schema.programDays.id, schema.workouts.programDayId))
+		.leftJoin(schema.programs, eq(schema.programs.id, schema.programDays.programId))
 		.where(and(...conditions))
 		.orderBy(desc(schema.workouts.performedOn), desc(schema.workouts.id))
 		.$dynamic();
@@ -178,7 +207,19 @@ export function listWorkoutSummaries(
 	const byWorkout = new Map<number, WorkoutSummary>();
 	for (const w of workouts) {
 		byWorkout.set(w.id, {
-			...w,
+			id: w.id,
+			performedOn: w.performedOn,
+			title: w.title,
+			notes: w.notes,
+			isFinished: w.endedAt != null,
+			program:
+				w.programName != null && w.weekNumber != null && w.dayOrderIndex != null
+					? {
+							name: w.programName,
+							weekNumber: w.weekNumber,
+							dayNumber: w.dayOrderIndex + 1
+						}
+					: null,
 			exerciseCount: 0,
 			setCount: 0,
 			totalVolumeKg: 0,
@@ -268,7 +309,8 @@ export function getWorkout(
 			distanceM: set.distanceM,
 			durationS: set.durationS,
 			isWarmup: set.isWarmup,
-			isCompleted: set.isCompleted
+			isCompleted: set.isCompleted,
+			...targetsOf(set)
 		});
 		setsByExercise.set(set.workoutExerciseId, list);
 	}
@@ -338,7 +380,8 @@ export function getPreviousSets(
 			distanceM: set.distanceM,
 			durationS: set.durationS,
 			isWarmup: set.isWarmup,
-			isCompleted: set.isCompleted
+			isCompleted: set.isCompleted,
+			...targetsOf(set)
 		}));
 }
 
@@ -362,6 +405,56 @@ export function createWorkout(
 		})
 		.returning({ id: schema.workouts.id })
 		.get().id;
+}
+
+/**
+ * Write one prescribed exercise into a workout: the `workout_exercises` row
+ * plus as many empty sets as the plan asked for, each carrying the plan in its
+ * `target_*` columns and nothing whatsoever in its measurement columns.
+ *
+ * Both the routine path and the program path come through here, so "a plan
+ * writes targets, never measurements" holds in one place instead of two. Takes
+ * no `userId` on purpose: both callers have already resolved ownership and are
+ * inside their own transaction.
+ */
+export function writePrescribedExercise(
+	tx: Db,
+	workoutId: number,
+	input: {
+		exerciseId: number;
+		orderIndex: number;
+		targetSets: number | null;
+		notes: string | null;
+		prescription: ResolvedPrescription;
+	}
+): number {
+	const workoutExerciseId = tx
+		.insert(schema.workoutExercises)
+		.values({
+			workoutId,
+			exerciseId: input.exerciseId,
+			orderIndex: input.orderIndex,
+			notes: input.notes
+		})
+		.returning({ id: schema.workoutExercises.id })
+		.get().id;
+
+	const setCount = Math.min(Math.max(input.targetSets ?? 1, 1), MAX_PRESCRIBED_SETS);
+	for (let i = 0; i < setCount; i++) {
+		tx.insert(schema.sets)
+			.values({
+				workoutExerciseId,
+				orderIndex: i,
+				// Measurement columns stay null until the lifter confirms the set.
+				// That is the whole point: it is what lets `finishWorkout` tell the
+				// sets that happened from the ones that were only ever asked for.
+				isCompleted: false,
+				...input.prescription
+			})
+			.run();
+	}
+
+	return workoutExerciseId;
 }
 
 /**
@@ -402,35 +495,25 @@ export function createWorkoutFromRoutine(
 			.get().id;
 
 		items.forEach((item, index) => {
-			const workoutExerciseId = tx
-				.insert(schema.workoutExercises)
-				.values({
-					workoutId,
-					exerciseId: item.exerciseId,
-					orderIndex: index,
-					notes: item.notes
-				})
-				.returning({ id: schema.workoutExercises.id })
-				.get().id;
-
-			const setCount = Math.min(Math.max(item.targetSets ?? 1, 1), 20);
-			for (let i = 0; i < setCount; i++) {
-				tx.insert(schema.sets)
-					.values({
-						workoutExerciseId,
-						orderIndex: i,
-						// No weight: a routine records the plan, not the load, which
-						// moves as you get stronger. The user fills it in from the bar.
-						weightKg: null,
-						// The bottom of a rep range is the commitment; anything above it
-						// is upside the user types in as they go.
-						reps: item.targetRepsMin,
-						distanceM: item.targetDistanceM,
-						durationS: item.targetDurationS,
-						isCompleted: false
-					})
-					.run();
-			}
+			writePrescribedExercise(tx as Db, workoutId, {
+				exerciseId: item.exerciseId,
+				orderIndex: index,
+				targetSets: item.targetSets,
+				notes: item.notes,
+				// A routine only ever prescribes effort, so it resolves with no
+				// reference max and never produces a target weight: the load moves
+				// as you get stronger and you read it off the bar, not off a plan
+				// written months ago.
+				prescription: {
+					targetWeightKg: null,
+					targetRepsMin: item.targetRepsMin,
+					targetRepsMax: item.targetRepsMax,
+					targetRpe: item.targetRpe,
+					targetPercentOneRm: null,
+					targetDistanceM: item.targetDistanceM,
+					targetDurationS: item.targetDurationS
+				}
+			});
 		});
 
 		return workoutId;
@@ -456,25 +539,57 @@ export function updateWorkout(
 
 export function finishWorkout(userId: number, workoutId: number, db: Db = getDb()): boolean {
 	if (!ownsWorkout(userId, workoutId, db)) return false;
-	db.update(schema.workouts)
-		.set({ endedAt: new Date(), updatedAt: new Date() })
-		.where(eq(schema.workouts.id, workoutId))
-		.run();
-	// Anything still marked incomplete was logged but never ticked off; treat
-	// finishing the workout as confirming them.
-	db.update(schema.sets)
-		.set({ isCompleted: true })
-		.where(
-			inArray(
-				schema.sets.workoutExerciseId,
-				db
-					.select({ id: schema.workoutExercises.id })
-					.from(schema.workoutExercises)
-					.where(eq(schema.workoutExercises.workoutId, workoutId))
+
+	return db.transaction((tx) => {
+		const exerciseIds = tx
+			.select({ id: schema.workoutExercises.id })
+			.from(schema.workoutExercises)
+			.where(eq(schema.workoutExercises.workoutId, workoutId));
+
+		// Drop the sets a plan created that nobody went near. A prescribed set
+		// with nothing measured in it is not evidence of anything, and counting
+		// it would put work you never did into your volume and your records.
+		//
+		// The predicate leans on the target columns rather than on `isCompleted`
+		// alone: a set the lifter added by hand carries no targets and so can
+		// never match here, whatever its completion flag says.
+		tx.delete(schema.sets)
+			.where(
+				and(
+					inArray(schema.sets.workoutExerciseId, exerciseIds),
+					eq(schema.sets.isCompleted, false),
+					sql`(
+						${schema.sets.targetWeightKg} is not null
+						or ${schema.sets.targetRepsMin} is not null
+						or ${schema.sets.targetRpe} is not null
+						or ${schema.sets.targetPercentOneRm} is not null
+						or ${schema.sets.targetDistanceM} is not null
+						or ${schema.sets.targetDurationS} is not null
+					)`,
+					isNull(schema.sets.weightKg),
+					isNull(schema.sets.reps),
+					isNull(schema.sets.rpe),
+					isNull(schema.sets.distanceM),
+					isNull(schema.sets.durationS)
+				)
 			)
-		)
-		.run();
-	return true;
+			.run();
+
+		// Anything still marked incomplete was logged but never ticked off; treat
+		// finishing the workout as confirming them. Runs after the prune, or it
+		// would mark the untouched rows done and leave nothing to drop.
+		tx.update(schema.sets)
+			.set({ isCompleted: true })
+			.where(inArray(schema.sets.workoutExerciseId, exerciseIds))
+			.run();
+
+		tx.update(schema.workouts)
+			.set({ endedAt: new Date(), updatedAt: new Date() })
+			.where(eq(schema.workouts.id, workoutId))
+			.run();
+
+		return true;
+	});
 }
 
 export function deleteWorkout(userId: number, workoutId: number, db: Db = getDb()): boolean {
@@ -557,6 +672,14 @@ export function moveWorkoutExercise(
 	});
 }
 
+/**
+ * Add a set by hand.
+ *
+ * No `target_*` values and no `isCompleted: false`: a set the lifter adds is a
+ * record of work beyond the plan, not something the plan asked for. Both
+ * omissions look like oversights and are not — they are what keeps an extra
+ * set safe from the prune in `finishWorkout`.
+ */
 export function addSet(
 	userId: number,
 	workoutExerciseId: number,
@@ -594,7 +717,11 @@ export function addSet(
 	});
 }
 
-/** Copy the last set of an exercise — the fastest way to log a straight-set scheme. */
+/**
+ * Copy the last set of an exercise — the fastest way to log a straight-set
+ * scheme. Copies what was measured and, like `addSet`, deliberately carries no
+ * prescription across: repeating a set is extra work, not planned work.
+ */
 export function repeatLastSet(
 	userId: number,
 	workoutExerciseId: number,

@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import Icon from '$lib/components/Icon.svelte';
 	import StatTile from '$lib/components/StatTile.svelte';
+	import UpNextCard from '$lib/components/program/UpNextCard.svelte';
 	import LineChart from '$lib/components/charts/LineChart.svelte';
 	import StackedBarChart from '$lib/components/charts/StackedBarChart.svelte';
 	import { compactNumber } from '$lib/components/charts/chart-utils';
@@ -126,10 +127,22 @@
 	</a>
 </div>
 
-<a href="/workouts/new?date={data.today}" class="ow-btn-primary mb-5 w-full md:hidden">
-	<Icon name="plus" size={16} />
-	Log a workout for today
-</a>
+<!--
+	The dashboard gains a forward-looking element only when there is something
+	forward-looking to say: with no program running, the page is exactly what it
+	was before programs existed. The card absorbs the mobile CTA rather than
+	stacking two primary buttons.
+-->
+{#if data.upNext}
+	<div class="mb-5">
+		<UpNextCard upNext={data.upNext} freeformHref="/workouts/new?date={data.today}" />
+	</div>
+{:else}
+	<a href="/workouts/new?date={data.today}" class="ow-btn-primary mb-5 w-full md:hidden">
+		<Icon name="plus" size={16} />
+		Log a workout for today
+	</a>
+{/if}
 
 <!-- This week -->
 <div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">

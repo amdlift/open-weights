@@ -13,6 +13,10 @@ export const NAV_ITEMS: NavItem[] = [
 	{ href: '/calendar', label: 'Calendar', icon: 'calendar', primary: true },
 	{ href: '/workouts', label: 'Workouts', icon: 'list' },
 	{ href: '/exercises', label: 'Exercises', icon: 'dumbbell', primary: true },
+	// Programs and routines are the two "plan" entities and belong adjacent.
+	// Not primary: the mobile tab bar is a fixed four columns, and the up-next
+	// card on the dashboard is the daily way into a program anyway.
+	{ href: '/programs', label: 'Programs', icon: 'layers' },
 	{ href: '/routines', label: 'Routines', icon: 'copy' },
 	{ href: '/measurements', label: 'Measurements', icon: 'ruler' },
 	{ href: '/records', label: 'Records', icon: 'trophy' },

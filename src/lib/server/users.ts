@@ -194,6 +194,15 @@ export function deleteUser(userId: number, db: Db = getDb()): void {
 			tx.delete(schema.workouts).where(eq(schema.workouts.userId, userId)).run();
 		}
 
+		// Before the custom exercises below: a program's prescriptions and its
+		// snapshotted maxes both hold `restrict` references to `exercises`, so
+		// leaving them for the cascade would abort the whole delete for anyone who
+		// had ever put a custom movement in a program.
+		tx.delete(schema.programEnrollments)
+			.where(eq(schema.programEnrollments.userId, userId))
+			.run();
+		tx.delete(schema.programs).where(eq(schema.programs.userId, userId)).run();
+
 		tx.delete(schema.routines).where(eq(schema.routines.userId, userId)).run();
 		tx.delete(schema.bodyMeasurements)
 			.where(eq(schema.bodyMeasurements.userId, userId))

@@ -22,10 +22,16 @@
 		options: Option[];
 		/** Exercises already in this workout, shown but marked. */
 		alreadyAdded?: number[];
+		/**
+		 * Extra hidden fields to post with the pick — a program day needs to say
+		 * which cell it is. The action name stays hard-coded, because that is what
+		 * makes this component drop into any page that names its action the same.
+		 */
+		extra?: Record<string, string>;
 		onclose?: () => void;
 	};
 
-	let { options, alreadyAdded = [], onclose }: Props = $props();
+	let { options, alreadyAdded = [], extra = {}, onclose }: Props = $props();
 
 	let query = $state('');
 	let input = $state<HTMLInputElement | null>(null);
@@ -85,6 +91,9 @@
 					<li>
 						<form method="POST" action="?/addExercise" use:enhance>
 							<input type="hidden" name="exerciseId" value={option.id} />
+							{#each Object.entries(extra) as [name, value] (name)}
+								<input type="hidden" {name} {value} />
+							{/each}
 							<button
 								type="submit"
 								class="flex w-full items-center justify-between gap-3 px-2 py-2.5 text-left

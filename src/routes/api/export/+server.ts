@@ -114,6 +114,82 @@ export const GET: RequestHandler = ({ locals }) => {
 				.all()
 		: [];
 
+	const programs = db
+		.select()
+		.from(schema.programs)
+		.where(eq(schema.programs.userId, user.id))
+		.all();
+
+	const programIds = programs.map((p) => p.id);
+
+	const programDays = programIds.length
+		? db
+				.select()
+				.from(schema.programDays)
+				.where(inArray(schema.programDays.programId, programIds))
+				.orderBy(asc(schema.programDays.weekNumber), asc(schema.programDays.orderIndex))
+				.all()
+		: [];
+
+	const programPrescriptions = programDays.length
+		? db
+				.select({
+					programDayId: schema.programDayExercises.programDayId,
+					orderIndex: schema.programDayExercises.orderIndex,
+					targetSets: schema.programDayExercises.targetSets,
+					targetRepsMin: schema.programDayExercises.targetRepsMin,
+					targetRepsMax: schema.programDayExercises.targetRepsMax,
+					intensityMode: schema.programDayExercises.intensityMode,
+					targetRpe: schema.programDayExercises.targetRpe,
+					targetPercentOneRm: schema.programDayExercises.targetPercentOneRm,
+					targetDistanceM: schema.programDayExercises.targetDistanceM,
+					targetDurationS: schema.programDayExercises.targetDurationS,
+					notes: schema.programDayExercises.notes,
+					exerciseSlug: schema.exercises.slug,
+					exerciseName: schema.exercises.name
+				})
+				.from(schema.programDayExercises)
+				.innerJoin(
+					schema.exercises,
+					eq(schema.exercises.id, schema.programDayExercises.exerciseId)
+				)
+				.where(
+					inArray(
+						schema.programDayExercises.programDayId,
+						programDays.map((d) => d.id)
+					)
+				)
+				.orderBy(asc(schema.programDayExercises.orderIndex))
+				.all()
+		: [];
+
+	const enrollments = db
+		.select()
+		.from(schema.programEnrollments)
+		.where(eq(schema.programEnrollments.userId, user.id))
+		.orderBy(asc(schema.programEnrollments.startedOn))
+		.all();
+
+	const enrollmentOneRms = enrollments.length
+		? db
+				.select({
+					enrollmentId: schema.programOneRms.enrollmentId,
+					oneRmKg: schema.programOneRms.oneRmKg,
+					isManual: schema.programOneRms.isManual,
+					exerciseSlug: schema.exercises.slug,
+					exerciseName: schema.exercises.name
+				})
+				.from(schema.programOneRms)
+				.innerJoin(schema.exercises, eq(schema.exercises.id, schema.programOneRms.exerciseId))
+				.where(
+					inArray(
+						schema.programOneRms.enrollmentId,
+						enrollments.map((e) => e.id)
+					)
+				)
+				.all()
+		: [];
+
 	const measurements = db
 		.select()
 		.from(schema.bodyMeasurements)
@@ -128,9 +204,29 @@ export const GET: RequestHandler = ({ locals }) => {
 		setsByExercise.set(set.workoutExerciseId, list);
 	}
 
+	const programsById = new Map(programs.map((p) => [p.id, p]));
+	const daysById = new Map(programDays.map((d) => [d.id, d]));
+
+	/** A workout's place in a program, by name and position rather than by id. */
+	function programOrigin(programDayId: number | null) {
+		const day = programDayId == null ? null : daysById.get(programDayId);
+		const program = day ? programsById.get(day.programId) : null;
+		if (!day || !program) return null;
+		return {
+			name: program.name,
+			weekNumber: day.weekNumber,
+			day: day.orderIndex + 1,
+			dayTitle: day.title
+		};
+	}
+
 	const payload = {
 		format: 'openweights-export',
-		version: 1,
+		// Bumped from 1: the meaning of an existing field changed. A prescribed
+		// set used to export its plan in `reps`, and now exports `reps: null`
+		// with the plan beside it in `targetRepsMin`, so anything summing reps
+		// would silently under-count against the old shape.
+		version: 2,
 		exportedAt: new Date().toISOString(),
 		units: 'metric — weights in kg, lengths in cm, distances in m, durations in seconds',
 		user: {
@@ -156,6 +252,7 @@ export const GET: RequestHandler = ({ locals }) => {
 			notes: workout.notes,
 			startedAt: workout.startedAt?.toISOString() ?? null,
 			endedAt: workout.endedAt?.toISOString() ?? null,
+			program: programOrigin(workout.programDayId),
 			exercises: workoutExercises
 				.filter((we) => we.workoutId === workout.id)
 				.map((we) => ({
@@ -170,7 +267,15 @@ export const GET: RequestHandler = ({ locals }) => {
 						rpe: set.rpe,
 						distanceM: set.distanceM,
 						durationS: set.durationS,
-						isWarmup: set.isWarmup
+						isWarmup: set.isWarmup,
+						// What the plan asked for, kept beside what was done.
+						targetWeightKg: set.targetWeightKg,
+						targetRepsMin: set.targetRepsMin,
+						targetRepsMax: set.targetRepsMax,
+						targetRpe: set.targetRpe,
+						targetPercentOneRm: set.targetPercentOneRm,
+						targetDistanceM: set.targetDistanceM,
+						targetDurationS: set.targetDurationS
 					}))
 				}))
 		})),
@@ -181,6 +286,39 @@ export const GET: RequestHandler = ({ locals }) => {
 			exercises: routineExercises
 				.filter((re) => re.routineId === routine.id)
 				.map(({ id: _id, routineId: _routineId, ...rest }) => rest)
+		})),
+		// Runs nest inside their program: programs have no slug, and inventing
+		// one would drag in the permanent-slug machinery for no gain.
+		programs: programs.map((program) => ({
+			name: program.name,
+			notes: program.notes,
+			daysPerWeek: program.daysPerWeek,
+			isArchived: program.isArchived,
+			weeks: [...new Set(programDays.filter((d) => d.programId === program.id).map((d) => d.weekNumber))]
+				.sort((a, b) => a - b)
+				.map((weekNumber) => ({
+					weekNumber,
+					days: programDays
+						.filter((d) => d.programId === program.id && d.weekNumber === weekNumber)
+						.map((day) => ({
+							day: day.orderIndex + 1,
+							title: day.title,
+							notes: day.notes,
+							exercises: programPrescriptions
+								.filter((p) => p.programDayId === day.id)
+								.map(({ programDayId: _programDayId, ...rest }) => rest)
+						}))
+				})),
+			runs: enrollments
+				.filter((e) => e.programId === program.id)
+				.map((enrollment) => ({
+					startedOn: enrollment.startedOn,
+					completedOn: enrollment.completedOn,
+					notes: enrollment.notes,
+					referenceOneRms: enrollmentOneRms
+						.filter((r) => r.enrollmentId === enrollment.id)
+						.map(({ enrollmentId: _enrollmentId, ...rest }) => rest)
+				}))
 		})),
 		measurements: measurements.map(({ id: _id, userId: _userId, ...rest }) => rest)
 	};

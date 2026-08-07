@@ -14,6 +14,7 @@ import {
 	suggestPinnedExercises
 } from '$lib/server/stats';
 import { listExercises } from '$lib/server/exercises';
+import { getActiveUpNext } from '$lib/server/programs';
 import { listWorkoutSummaries } from '$lib/server/workouts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -61,6 +62,7 @@ export const load: PageServerLoad = ({ locals }) => {
 			.filter((series) => series.points.length > 0),
 		pinnedIds,
 		isAutoPinned: user.pinnedExerciseIds.length === 0,
+		upNext: getActiveUpNext(user.id),
 		recentWorkouts: listWorkoutSummaries(user.id, { limit: 5 }),
 		// Only loaded lifts can carry a 1RM estimate, so only they are offered.
 		pinnableExercises: listExercises(user.id)

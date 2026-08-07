@@ -29,6 +29,11 @@ describe('migrations', () => {
 			'sets',
 			'routines',
 			'routine_exercises',
+			'programs',
+			'program_days',
+			'program_day_exercises',
+			'program_enrollments',
+			'program_one_rms',
 			'body_measurements',
 			'instance_meta'
 		]) {

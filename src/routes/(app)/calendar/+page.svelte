@@ -147,6 +147,12 @@
 									{workout.title || 'Workout'}
 								</span>
 								<span class="block truncate text-xs text-faint">
+									{#if workout.program}
+										<span class="text-primary">
+											W{workout.program.weekNumber} · D{workout.program.dayNumber}
+										</span>
+										·
+									{/if}
 									{workout.exerciseNames.join(' · ') || 'No exercises'}
 								</span>
 							</span>

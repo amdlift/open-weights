@@ -274,6 +274,17 @@ describe('finishWorkout', () => {
 		expect(workout.endedAt).not.toBeNull();
 		expect(workout.exercises[0].sets.every((s) => s.isCompleted)).toBe(true);
 	});
+
+	it('keeps a blank set the user added by hand', () => {
+		const { workoutId, workoutExerciseId } = seedWorkout('2026-01-05', squatId, []);
+		addSet(userId, workoutExerciseId, {}, db);
+
+		finishWorkout(userId, workoutId, db);
+
+		// It carries no target, so the prune cannot reach it however empty it is.
+		// Eating a row the user deliberately added would be the worse failure.
+		expect(getWorkout(userId, workoutId, db)!.exercises[0].sets).toHaveLength(1);
+	});
 });
 
 describe('deleteWorkout', () => {
