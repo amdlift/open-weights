@@ -19,14 +19,8 @@ export type ExerciseListItem = {
 };
 
 export type ExerciseFilters = {
-	search?: string;
-	muscle?: MuscleGroup | 'all';
-	equipment?: EquipmentType | 'all';
-	kind?: ExerciseKind | 'all';
 	/** Include exercises the user has hidden. */
 	includeHidden?: boolean;
-	/** Only the user's own exercises. */
-	customOnly?: boolean;
 };
 
 /**
@@ -35,6 +29,11 @@ export type ExerciseFilters = {
  *
  * Retired built-ins (`is_archived`) are excluded unless the user has actually
  * logged them, in which case they remain visible for history but sort last.
+ *
+ * Searching and narrowing by muscle or equipment deliberately do not happen
+ * here. The library is small enough to ship whole with the page, and every
+ * caller filters it on the client so typing feels instant — see
+ * `ExercisePicker.svelte` and the exercise library page.
  */
 export function listExercises(
 	userId: number,
@@ -70,8 +69,6 @@ export function listExercises(
 		.orderBy(asc(schema.exercises.name))
 		.all();
 
-	const search = filters.search?.trim().toLowerCase() ?? '';
-
 	return rows
 		.map((row) => {
 			const stats = usageById.get(row.id);
@@ -94,19 +91,6 @@ export function listExercises(
 			// A built-in dropped by a later release stays only if it is in use.
 			if (item.isArchived && item.useCount === 0) return false;
 			if (!filters.includeHidden && item.isHidden) return false;
-			if (filters.customOnly && !item.isCustom) return false;
-			if (filters.muscle && filters.muscle !== 'all' && item.primaryMuscle !== filters.muscle) {
-				return false;
-			}
-			if (
-				filters.equipment &&
-				filters.equipment !== 'all' &&
-				item.equipment !== filters.equipment
-			) {
-				return false;
-			}
-			if (filters.kind && filters.kind !== 'all' && item.kind !== filters.kind) return false;
-			if (search && !item.name.toLowerCase().includes(search)) return false;
 			return true;
 		})
 		.map(({ isArchived: _isArchived, ...item }) => item);

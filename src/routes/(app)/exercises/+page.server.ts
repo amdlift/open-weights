@@ -5,7 +5,6 @@ import {
 	MUSCLE_GROUPS,
 	isOneOf,
 	type EquipmentType,
-	type ExerciseKind,
 	type MuscleGroup
 } from '$lib/constants';
 import { createCustomExercise, listExercises, setExerciseHidden } from '$lib/server/exercises';
@@ -14,33 +13,30 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = ({ locals, url }) => {
 	const user = locals.user!;
 
-	const search = url.searchParams.get('q') ?? '';
 	const muscleParam = url.searchParams.get('muscle') ?? 'all';
 	const equipmentParam = url.searchParams.get('equipment') ?? 'all';
-	const kindParam = url.searchParams.get('kind') ?? 'all';
-	const showHidden = url.searchParams.get('hidden') === '1';
-	const customOnly = url.searchParams.get('mine') === '1';
-
-	const filters = {
-		search,
-		muscle: isOneOf(MUSCLE_GROUPS, muscleParam) ? (muscleParam as MuscleGroup) : ('all' as const),
-		equipment: isOneOf(EQUIPMENT_TYPES, equipmentParam)
-			? (equipmentParam as EquipmentType)
-			: ('all' as const),
-		kind: isOneOf(EXERCISE_KINDS, kindParam) ? (kindParam as ExerciseKind) : ('all' as const),
-		includeHidden: showHidden,
-		customOnly
-	};
 
 	return {
-		exercises: listExercises(user.id, filters),
+		/*
+		 * The whole library, hidden entries included. It is ~130 rows, so shipping
+		 * it once and filtering on the client makes search instant — the page used
+		 * to round-trip through here on every filter change, which is why it
+		 * needed an "Apply" button.
+		 */
+		exercises: listExercises(user.id, { includeHidden: true }),
+		/*
+		 * Read from the URL only to seed the controls, so existing links and
+		 * bookmarks still open the view they describe. The client owns them after
+		 * that and writes them back with replaceState.
+		 */
 		filters: {
-			search,
-			muscle: filters.muscle,
-			equipment: filters.equipment,
-			kind: filters.kind,
-			showHidden,
-			customOnly
+			search: url.searchParams.get('q') ?? '',
+			muscle: isOneOf(MUSCLE_GROUPS, muscleParam) ? (muscleParam as MuscleGroup) : ('all' as const),
+			equipment: isOneOf(EQUIPMENT_TYPES, equipmentParam)
+				? (equipmentParam as EquipmentType)
+				: ('all' as const),
+			showHidden: url.searchParams.get('hidden') === '1',
+			customOnly: url.searchParams.get('mine') === '1'
 		}
 	};
 };

@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
+	import { replaceState } from '$app/navigation';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import {
@@ -9,7 +11,9 @@
 		EXERCISE_KIND_HINTS,
 		EXERCISE_KIND_LABELS,
 		MUSCLE_GROUPS,
-		MUSCLE_GROUP_LABELS
+		MUSCLE_GROUP_LABELS,
+		type EquipmentType,
+		type MuscleGroup
 	} from '$lib/constants';
 	import type { ActionData, PageData } from './$types';
 
@@ -18,27 +22,88 @@
 	let showCreate = $state(false);
 	let newKind = $state<(typeof EXERCISE_KINDS)[number]>('weight_reps');
 
+	/*
+	 * Filters live on the client. The whole library ships with the page, so
+	 * narrowing it is a derived array rather than a navigation — the same thing
+	 * the in-workout ExercisePicker does. Seeded once from the URL so a shared
+	 * link opens the view it describes.
+	 */
+	let search = $state(untrack(() => data.filters.search));
+	let muscle = $state<MuscleGroup | 'all'>(untrack(() => data.filters.muscle));
+	let equipment = $state<EquipmentType | 'all'>(untrack(() => data.filters.equipment));
+	let customOnly = $state(untrack(() => data.filters.customOnly));
+	let showHidden = $state(untrack(() => data.filters.showHidden));
+
+	let visible = $derived.by(() => {
+		const query = search.trim().toLowerCase();
+		return data.exercises.filter((item) => {
+			if (!showHidden && item.isHidden) return false;
+			if (customOnly && !item.isCustom) return false;
+			if (muscle !== 'all' && item.primaryMuscle !== muscle) return false;
+			if (equipment !== 'all' && item.equipment !== equipment) return false;
+			if (query && !item.name.toLowerCase().includes(query)) return false;
+			return true;
+		});
+	});
+
 	// Built-ins and custom entries are shown apart: one list is the shared
 	// library, the other is the user's own, and they are managed differently.
-	let custom = $derived(data.exercises.filter((e) => e.isCustom));
-	let builtin = $derived(data.exercises.filter((e) => !e.isCustom));
+	let custom = $derived(visible.filter((e) => e.isCustom));
+	let builtin = $derived(visible.filter((e) => !e.isCustom));
 
 	let activeFilterCount = $derived(
-		[
-			data.filters.muscle !== 'all',
-			data.filters.equipment !== 'all',
-			data.filters.kind !== 'all',
-			data.filters.customOnly,
-			data.filters.showHidden
-		].filter(Boolean).length
+		[muscle !== 'all', equipment !== 'all', customOnly, showHidden].filter(Boolean).length
 	);
+
+	function clearFilters() {
+		search = '';
+		muscle = 'all';
+		equipment = 'all';
+		customOnly = false;
+		showHidden = false;
+	}
+
+	/*
+	 * Mirror the filters into the URL so the view stays shareable and, more
+	 * usefully, so opening an exercise and pressing Back returns to the filtered
+	 * list rather than the full library. replaceState keeps this out of the
+	 * history stack — one entry per keystroke would make Back unusable.
+	 *
+	 * Reads only the filter state, never page.url, or it would retrigger itself.
+	 */
+	// Plain `let`, not `$state`: this is bookkeeping, not something to react to.
+	let routerReady = false;
+
+	$effect(() => {
+		const params = new URLSearchParams();
+		if (search.trim()) params.set('q', search.trim());
+		if (muscle !== 'all') params.set('muscle', muscle);
+		if (equipment !== 'all') params.set('equipment', equipment);
+		if (customOnly) params.set('mine', '1');
+		if (showHidden) params.set('hidden', '1');
+		const query = params.toString();
+
+		// The first run lands during hydration, before SvelteKit's router exists;
+		// calling replaceState then throws and kills the effect for good. The URL
+		// already matches the filters at that point anyway, since they were seeded
+		// from it.
+		if (!routerReady) {
+			routerReady = true;
+			return;
+		}
+
+		// Skip no-op writes, e.g. typing and deleting a character.
+		if (query === location.search.replace(/^\?/, '')) return;
+
+		replaceState(query ? `?${query}` : location.pathname, {});
+	});
 </script>
 
 <svelte:head><title>Exercises · OpenWeights</title></svelte:head>
 
 <PageHeader
 	title="Exercises"
-	description="{data.exercises.length} available — the built-in library plus anything you add."
+	description="{visible.length} of {data.exercises.length} — the built-in library plus anything you add."
 >
 	{#snippet actions()}
 		<button type="button" class="ow-btn-primary" onclick={() => (showCreate = !showCreate)}>
@@ -127,8 +192,8 @@
 	</div>
 {/if}
 
-<!-- Filters submit as a plain GET so the current view is a shareable URL. -->
-<form method="GET" class="ow-card mb-5 p-3">
+<!-- Filters apply as you type; nothing here submits. -->
+<div class="ow-card mb-5 p-3">
 	<div class="flex flex-wrap items-end gap-2">
 		<div class="min-w-40 flex-1">
 			<label class="sr-only" for="q">Search exercises</label>
@@ -138,34 +203,31 @@
 				</span>
 				<input
 					id="q"
-					name="q"
+					type="search"
 					class="ow-input pl-9"
 					placeholder="Search…"
-					value={data.filters.search}
+					autocomplete="off"
+					bind:value={search}
 				/>
 			</div>
 		</div>
 
 		<div>
 			<label class="sr-only" for="muscle">Muscle group</label>
-			<select id="muscle" name="muscle" class="ow-input w-auto">
+			<select id="muscle" class="ow-input w-auto" bind:value={muscle}>
 				<option value="all">All muscles</option>
-				{#each MUSCLE_GROUPS as muscle (muscle)}
-					<option value={muscle} selected={data.filters.muscle === muscle}>
-						{MUSCLE_GROUP_LABELS[muscle]}
-					</option>
+				{#each MUSCLE_GROUPS as group (group)}
+					<option value={group}>{MUSCLE_GROUP_LABELS[group]}</option>
 				{/each}
 			</select>
 		</div>
 
 		<div>
 			<label class="sr-only" for="equipment">Equipment</label>
-			<select id="equipment" name="equipment" class="ow-input w-auto">
+			<select id="equipment" class="ow-input w-auto" bind:value={equipment}>
 				<option value="all">All equipment</option>
-				{#each EQUIPMENT_TYPES as equipment (equipment)}
-					<option value={equipment} selected={data.filters.equipment === equipment}>
-						{EQUIPMENT_LABELS[equipment]}
-					</option>
+				{#each EQUIPMENT_TYPES as type (type)}
+					<option value={type}>{EQUIPMENT_LABELS[type]}</option>
 				{/each}
 			</select>
 		</div>
@@ -173,9 +235,7 @@
 		<label class="flex min-h-11 items-center gap-2 px-1 text-sm text-muted">
 			<input
 				type="checkbox"
-				name="mine"
-				value="1"
-				checked={data.filters.customOnly}
+				bind:checked={customOnly}
 				class="h-4 w-4 accent-[var(--ow-primary)]"
 			/>
 			Mine only
@@ -184,20 +244,17 @@
 		<label class="flex min-h-11 items-center gap-2 px-1 text-sm text-muted">
 			<input
 				type="checkbox"
-				name="hidden"
-				value="1"
-				checked={data.filters.showHidden}
+				bind:checked={showHidden}
 				class="h-4 w-4 accent-[var(--ow-primary)]"
 			/>
 			Show hidden
 		</label>
 
-		<button type="submit" class="ow-btn-secondary">Apply</button>
-		{#if activeFilterCount > 0 || data.filters.search}
-			<a href="/exercises" class="ow-btn-ghost">Clear</a>
+		{#if activeFilterCount > 0 || search.trim()}
+			<button type="button" class="ow-btn-ghost" onclick={clearFilters}>Clear</button>
 		{/if}
 	</div>
-</form>
+</div>
 
 {#snippet exerciseRow(item: PageData['exercises'][number])}
 	<div class="flex items-center gap-3 px-4 py-3">
@@ -234,10 +291,13 @@
 	</div>
 {/snippet}
 
-{#if data.exercises.length === 0}
+{#if visible.length === 0}
 	<div class="ow-card p-10 text-center">
 		<p class="font-medium">Nothing matches those filters</p>
 		<p class="mt-1 text-sm text-muted">Try clearing the search, or add your own exercise.</p>
+		<button type="button" class="ow-btn-secondary mt-4" onclick={clearFilters}>
+			Clear filters
+		</button>
 	</div>
 {:else}
 	<div class="space-y-5">
