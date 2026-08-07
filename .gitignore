@@ -2,6 +2,9 @@ node_modules/
 /build
 /.svelte-kit
 /data
+# compose.dev.yaml points npm's cache here so it survives between container
+# runs. It is build scratch, not source.
+/.npm-cache
 *.db
 *.db-shm
 *.db-wal
